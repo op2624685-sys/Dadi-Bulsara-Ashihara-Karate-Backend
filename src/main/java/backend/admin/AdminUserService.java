@@ -1,0 +1,126 @@
+package backend.admin;
+
+import backend.admin.dto.AdminUserSummaryResponse;
+import backend.admin.dto.RoleChangeRequest;
+import backend.admin.dto.SubAdminCreateRequest;
+import backend.common.exception.EmailAlreadyExistsException;
+import backend.common.exception.UserNotFoundException;
+import backend.security.SecurityService;
+import backend.teacher.dto.PageResponse;
+import backend.user.CosmeticCatalogue;
+import backend.user.Provider;
+import backend.user.Role;
+import backend.user.UserEntity;
+import backend.user.UserRepository;
+import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * ADMIN-only user management: listing accounts, creating state-scoped
+ * sub-admins, and promoting/demoting roles.
+ */
+@Service
+@RequiredArgsConstructor
+public class AdminUserService {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminUserService.class);
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final SecurityService securityService;
+
+    // ── List ──────────────────────────────────────────────────────────────────
+    @Transactional(readOnly = true)
+    public PageResponse<AdminUserSummaryResponse> listUsers(
+            String search, Role role, Pageable pageable) {
+
+        Specification<UserEntity> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (role != null) {
+                predicates.add(cb.equal(root.get("role"), role));
+            }
+            if (isNotBlank(search)) {
+                String like = "%" + search.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("email")), like),
+                        cb.like(cb.lower(root.get("firstName")), like),
+                        cb.like(cb.lower(root.get("lastName")), like)));
+            }
+            return predicates.isEmpty() ? cb.conjunction()
+                    : cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<UserEntity> page = userRepository.findAll(spec, pageable);
+        return PageResponse.of(page, AdminUserSummaryResponse::of);
+    }
+
+    // ── Create sub-admin ────────────────────────────────────────────────────────
+    @Transactional
+    public AdminUserSummaryResponse createSubAdmin(SubAdminCreateRequest req) {
+        String email = req.email().toLowerCase().trim();
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new EmailAlreadyExistsException(email);
+        }
+        UserEntity sub = UserEntity.builder()
+                .email(email)
+                .password(passwordEncoder.encode(req.password()))
+                .firstName(req.firstName().trim())
+                .lastName(req.lastName().trim())
+                .role(Role.SUB_ADMIN)
+                .managedState(req.state().trim())
+                .provider(Provider.LOCAL)
+                .enabled(true)
+                .emailVerified(true) // admin-created, no email verification step
+                .unlockedCosmetics(CosmeticCatalogue.allIds()) // staff unlock everything
+                .build();
+        sub = userRepository.save(sub);
+        log.info("Created SUB_ADMIN id={} email={} state={}", sub.getId(), email, sub.getManagedState());
+        return AdminUserSummaryResponse.of(sub);
+    }
+
+    // ── Change role ─────────────────────────────────────────────────────────────
+    @Transactional
+    public AdminUserSummaryResponse changeRole(Long id, RoleChangeRequest req) {
+        UserEntity user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + id));
+
+        // Guard: an admin cannot demote/lock themselves out accidentally via this path.
+        UserEntity caller = securityService.getCurrentUserOrNull();
+        if (caller != null && caller.getId().equals(id)
+                && req.role() != Role.ADMIN) {
+            throw new IllegalArgumentException("You cannot change your own role");
+        }
+
+        if (req.role() == Role.SUB_ADMIN) {
+            if (req.state() == null || req.state().isBlank()) {
+                throw new IllegalArgumentException("A SUB_ADMIN requires a managed state");
+            }
+            user.setManagedState(req.state().trim());
+        } else {
+            user.setManagedState(null);
+        }
+        user.setRole(req.role());
+        // Staff roles unlock every cosmetic (no belt → no partial unlocks).
+        if (req.role() == Role.ADMIN || req.role() == Role.SUB_ADMIN) {
+            user.setUnlockedCosmetics(CosmeticCatalogue.allIds());
+        }
+        user = userRepository.save(user);
+        log.info("Changed role for user_id={} to {} (state={})", id, req.role(), user.getManagedState());
+        return AdminUserSummaryResponse.of(user);
+    }
+
+    private static boolean isNotBlank(String s) {
+        return s != null && !s.isBlank();
+    }
+}
