@@ -1,0 +1,90 @@
+spring:
+  application:
+    name: karate
+
+  datasource:
+    url: ${DB_URL_KARATE}
+    username: ${DB_USERNAME_KARATE}
+    password: ${DB_PASSWORD_KARATE}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_AUTH:true}
+          starttls:
+            enable: ${MAIL_STARTTLS:true}
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+
+app:
+  security:
+    csrf-enabled: false   # dev: CSRF off; set true (or APP_SECURITY_CSRF_ENABLED=true) for deployment
+  jwt:
+    # Must be at least 32 bytes (256 bits) for HS256. Override in production.
+    secret: ${JWT_SECRET_KARATE}
+    access-ttl: PT15M          # 15 minutes (ISO-8601 duration)
+    refresh-ttl: P30D          # 30 days
+    issuer: karate-federation
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000}
+  mail:
+    from: ${MAIL_FROM:noreply@dadibulsara.local}
+    reset-base-url: ${RESET_BASE_URL:http://localhost:3000/reset-password}
+    verify-base-url: ${VERIFY_BASE_URL:http://localhost:3000/verify-email}
+  # Email-verification link lifetime. Keep this short (default 15m) so an
+  # unverified account isn't left exposed for long. ISO-8601 duration.
+  verification-ttl: ${VERIFICATION_TTL:PT15M}
+  cookies:
+    secure: ${COOKIES_SECURE:false}        # set to true behind HTTPS in prod
+
+  # Seed credentials for the developer admin account (AdminUserSeeder).
+  # Override via ADMIN_SEED_EMAIL / ADMIN_SEED_PASSWORD env vars.
+  admin:
+    seed-email: ${ADMIN_SEED_EMAIL:admin@dadibulsara.local}
+    seed-password: ${ADMIN_SEED_PASSWORD:ChangeMe123!}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+logging:
+  level:
+    org.springframework.security: INFO
+    org.hibernate.SQL: INFO
