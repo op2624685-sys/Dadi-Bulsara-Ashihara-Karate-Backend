@@ -161,6 +161,24 @@ backend/
 - **Security hardening** — CSRF double-submit cookies, BCrypt password hashing,
   in-memory rate limiting, and centralised JSON error handling.
 
+## Resource API (non-auth)
+
+The auth endpoints are documented above. The remaining resources are grouped by
+base path:
+
+| Module   | Base path                  | Access                                     |
+|----------|----------------------------|--------------------------------------------|
+| Students | `/api/v1/students`         | public reads; `register` & `me` authenticated |
+|          | `/api/v1/teacher/students` | `TEACHER`                                  |
+|          | `/api/v1/admin/students`   | `ADMIN`, `SUB_ADMIN`                       |
+| Teachers | `/api/v1/teachers`         | public reads; `register` open              |
+|          | `/api/v1/admin/teachers`   | `ADMIN`                                    |
+| Admin    | `/api/v1/admin`            | `ADMIN`, `SUB_ADMIN` (user mgmt + stats)   |
+
+All create/update endpoints require the `X-XSRF-TOKEN` header (see above). For
+the full request/response schema of every endpoint, open **Swagger UI** at
+<http://localhost:8080/swagger-ui.html>.
+
 ## See also
 
 - [SECURITY.md](./SECURITY.md) — token model, security trade-offs, prod checklist
