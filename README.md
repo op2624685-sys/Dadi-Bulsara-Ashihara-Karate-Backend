@@ -179,6 +179,29 @@ All create/update endpoints require the `X-XSRF-TOKEN` header (see above). For
 the full request/response schema of every endpoint, open **Swagger UI** at
 <http://localhost:8080/swagger-ui.html>.
 
+## Environment variables
+
+Copy `.env.example` → `.env` and fill these in. Every secret is read from the
+environment — nothing sensitive is committed.
+
+| Variable                     | Description                                          |
+|------------------------------|------------------------------------------------------|
+| `DB_URL`                     | JDBC URL (e.g. `jdbc:postgresql://host:5432/karate`) |
+| `DB_USERNAME` / `DB_PASSWORD`| PostgreSQL credentials                               |
+| `SERVER_PORT`                | HTTP port (default `8080`)                          |
+| `JWT_SECRET`                 | ≥32-byte secret for HS256 signing (**required**)     |
+| `CORS_ORIGINS`               | Comma-separated allowed origins                     |
+| `COOKIES_SECURE`             | `true` behind HTTPS in production                    |
+| `MAIL_HOST` / `MAIL_PORT`    | SMTP server                                          |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` | SMTP credentials                                |
+| `MAIL_AUTH` / `MAIL_STARTTLS`| SMTP auth / TLS toggles                              |
+| `MAIL_FROM`                  | From address for outbound email                      |
+| `RESET_BASE_URL`             | Base URL used in password-reset links                |
+| `VERIFY_BASE_URL`            | Base URL used in email-verification links            |
+| `ADMIN_SEED_EMAIL` / `ADMIN_SEED_PASSWORD` | Dev admin seed credentials               |
+| `VERIFICATION_TTL`           | Email-verification link lifetime (ISO-8601)          |
+| `APP_SECURITY_CSRF_ENABLED`   | Enable CSRF protection in deployment                 |
+
 ## See also
 
 - [SECURITY.md](./SECURITY.md) — token model, security trade-offs, prod checklist
