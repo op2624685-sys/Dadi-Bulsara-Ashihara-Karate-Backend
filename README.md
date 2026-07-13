@@ -147,6 +147,20 @@ backend/
 └── src/main/resources/application.yaml
 ```
 
+## Features
+
+- **Authentication & authorization** — stateless JWT access tokens plus opaque
+  refresh tokens with rotation and reuse detection, email verification, and
+  rate-limited password reset (`/api/v1/auth/*`).
+- **Student management** — registration, public/authenticated profiles, status
+  lifecycle, and teacher/admin-scoped views.
+- **Teacher management** — teacher CRUD, profiles, reviews, timeline entries, and
+  admin oversight.
+- **Admin & roles** — admin/sub-admin user management, role promotion/demotion,
+  and aggregate statistics.
+- **Security hardening** — CSRF double-submit cookies, BCrypt password hashing,
+  in-memory rate limiting, and centralised JSON error handling.
+
 ## See also
 
 - [SECURITY.md](./SECURITY.md) — token model, security trade-offs, prod checklist
