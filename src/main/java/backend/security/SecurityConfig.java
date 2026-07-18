@@ -87,10 +87,24 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/v1/students/register").authenticated()
                     // A student's own application — only visible to the applicant.
                     .requestMatchers(HttpMethod.GET, "/api/v1/students/me").hasRole("STUDENT")
+                    // Registration document upload — any authenticated applicant
+                    // (student/teacher signing up) can upload their KYC docs here.
+                    // Distinct path from /api/v1/admin/upload (admin-only CMS).
+                    .requestMatchers(HttpMethod.POST, "/api/v1/uploads/registration").authenticated()
                     // Public student directory (list + detail) — GETs only.
                     .requestMatchers("/api/v1/students/**").permitAll()
                     // Sensei-facing student approval queue.
                     .requestMatchers("/api/v1/teacher/**").hasRole("TEACHER")
+                    // Public reads for camps & events (GET only) — the mutating
+                    // admin routes below stay protected.
+                    .requestMatchers(HttpMethod.GET, "/api/v1/camps/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/events/**").permitAll()
+                    // Camps admin: ADMIN only. MUST precede the broad
+                    // /api/v1/admin/** rule (first-match-wins) so a SUB_ADMIN
+                    // hitting camp admin endpoints gets a 403.
+                    .requestMatchers("/api/v1/admin/camps/**").hasRole("ADMIN")
+                    // Events admin: ADMIN + SUB_ADMIN (sub-admin scoped to their state).
+                    .requestMatchers("/api/v1/admin/events/**").hasAnyRole("ADMIN", "SUB_ADMIN")
                     .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "SUB_ADMIN")
                     .anyRequest().authenticated())
             .formLogin(f -> f.disable())

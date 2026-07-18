@@ -13,6 +13,7 @@ import backend.user.Role;
 import backend.user.UserEntity;
 import backend.user.UserRepository;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,12 +44,22 @@ public class AdminUserService {
     // ── List ──────────────────────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public PageResponse<AdminUserSummaryResponse> listUsers(
-            String search, Role role, Pageable pageable) {
+            String search, Role role, String state, Pageable pageable) {
+
+        // A SUB_ADMIN is scoped to their own state — ignore any state they pass
+        // and force the filter to their managedState instead.
+        UserEntity caller = securityService.getCurrentUserOrNull();
+        final String effectiveState = (caller != null && caller.getRole() == Role.SUB_ADMIN)
+                ? caller.getManagedState()
+                : state;
 
         Specification<UserEntity> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (role != null) {
                 predicates.add(cb.equal(root.get("role"), role));
+            }
+            if (isNotBlank(effectiveState)) {
+                predicates.add(cb.equal(cb.lower(root.get("state")), effectiveState.toLowerCase()));
             }
             if (isNotBlank(search)) {
                 String like = "%" + search.toLowerCase() + "%";
@@ -118,6 +129,43 @@ public class AdminUserService {
         user = userRepository.save(user);
         log.info("Changed role for user_id={} to {} (state={})", id, req.role(), user.getManagedState());
         return AdminUserSummaryResponse.of(user);
+    }
+
+    // ── Block / Unblock ────────────────────────────────────────────────────────
+    @Transactional
+    public AdminUserSummaryResponse setBlocked(Long id, boolean blocked) {
+        UserEntity caller = securityService.getCurrentUserOrNull();
+        if (caller == null
+                || (caller.getRole() != Role.ADMIN && caller.getRole() != Role.SUB_ADMIN)) {
+            throw new AccessDeniedException("Only an ADMIN or SUB_ADMIN may manage users");
+        }
+
+        UserEntity target = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + id));
+
+        // Guard: an admin/sub-admin cannot lift the ban on (or ban) themselves.
+        if (caller.getId().equals(target.getId())) {
+            throw new IllegalArgumentException("You cannot block or unblock yourself");
+        }
+
+        // Guard: never block an ADMIN account — that could lock out the system.
+        if (target.getRole() == Role.ADMIN) {
+            throw new AccessDeniedException("ADMIN accounts cannot be blocked");
+        }
+
+        // SUB_ADMIN is scoped to their own state.
+        if (caller.getRole() == Role.SUB_ADMIN) {
+            if (target.getState() == null || caller.getManagedState() == null
+                    || !target.getState().equalsIgnoreCase(caller.getManagedState())) {
+                throw new AccessDeniedException(
+                        "Sub-admins may only manage users in state: " + caller.getManagedState());
+            }
+        }
+
+        target.setBlocked(blocked);
+        target = userRepository.save(target);
+        log.info("{} user_id={} (state={})", blocked ? "Blocked" : "Unblocked", id, target.getState());
+        return AdminUserSummaryResponse.of(target);
     }
 
     private static boolean isNotBlank(String s) {

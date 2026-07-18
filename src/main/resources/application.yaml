@@ -39,6 +39,12 @@ server:
       cookie:
         http-only: true
         same-site: lax
+    multipart:
+      # Hard cap on a single uploaded image and on the whole request.
+      # Exceeding these raises MaxUploadSizeExceededException -> HTTP 413
+      # (handled by GlobalExceptionHandler).
+      max-file-size: 8MB
+      max-request-size: 10MB
 
 app:
   security:
@@ -60,6 +66,17 @@ app:
   verification-ttl: ${VERIFICATION_TTL:PT15M}
   cookies:
     secure: ${COOKIES_SECURE:false}        # set to true behind HTTPS in prod
+
+  # Image storage (Cloudflare R2, with a local ./uploads fallback for dev).
+  # The R2_*_KARATE values are loaded from .env by KarateApplication#main.
+  storage:
+    r2:
+      enabled: ${R2_ENABLED_KARATE:false}
+      account-id: ${R2_ACCOUNT_ID_KARATE:}
+      access-key: ${R2_ACCESS_KEY_KARATE:}
+      secret-key: ${R2_SECRET_KEY_KARATE:}
+      bucket: ${R2_BUCKET_KARATE:}
+      public-url: ${R2_PUBLIC_URL_KARATE:}
 
   # Seed credentials for the developer admin account (AdminUserSeeder).
   # Override via ADMIN_SEED_EMAIL / ADMIN_SEED_PASSWORD env vars.

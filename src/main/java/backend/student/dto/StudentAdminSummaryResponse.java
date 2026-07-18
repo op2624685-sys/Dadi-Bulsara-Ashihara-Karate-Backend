@@ -27,7 +27,21 @@ public record StudentAdminSummaryResponse(
         StudentStatus status,
         String rejectionReason,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        // ── Identity / family (from the registration form) ──
+        String fatherName,
+        String motherName,
+        String dob,
+        String bloodGroup,
+        String mobileNumber,
+        String address,
+        String pinCode,
+        // ── Uploaded registration documents ──
+        String photo,
+        String aadharUrl,
+        String passportPhotoUrl,
+        String beltCertificateUrl,
+        String signatureUrl
 ) {
     public static StudentAdminSummaryResponse of(StudentEntity s) {
         return new StudentAdminSummaryResponse(
@@ -46,6 +60,18 @@ public record StudentAdminSummaryResponse(
                 s.getStatus(),
                 s.getRejectionReason(),
                 s.getCreatedAt(),
-                s.getUpdatedAt());
+                s.getUpdatedAt(),
+                s.getFatherName(),
+                s.getMotherName(),
+                s.getDob() != null ? s.getDob().toString() : null,
+                s.getBloodGroup(),
+                s.getMobileNumber(),
+                s.getAddress(),
+                s.getPinCode(),
+                s.getPhoto(),
+                s.getAadharUrl(),
+                s.getPassportPhotoUrl(),
+                s.getBeltCertificateUrl(),
+                s.getSignatureUrl());
     }
 }

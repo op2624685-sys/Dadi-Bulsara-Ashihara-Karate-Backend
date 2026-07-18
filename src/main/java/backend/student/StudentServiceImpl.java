@@ -184,6 +184,10 @@ public class StudentServiceImpl implements StudentService {
                 .address(req.address())
                 .pinCode(req.pinCode())
                 .photo(req.photoUrl())
+                .aadharUrl(req.aadharUrl())
+                .passportPhotoUrl(req.passportPhotoUrl())
+                .beltCertificateUrl(req.beltCertificateUrl())
+                .signatureUrl(req.signatureUrl())
                 .campsCount(0)
                 .eventsCount(0)
                 .isChampion(false)
@@ -222,6 +226,11 @@ public class StudentServiceImpl implements StudentService {
         if (req.city() != null)         student.setCity(req.city().isBlank() ? null : req.city().trim());
         if (req.pinCode() != null)      student.setPinCode(req.pinCode());
         student = studentRepository.save(student);
+        // Keep the account's state in sync so sub-admin scoping stays correct.
+        if (req.state() != null) {
+            currentUser.setState(req.state());
+            userRepository.save(currentUser);
+        }
         log.info("Student record updated: id={}", student.getId());
         return toResponse(student);
     }
@@ -363,6 +372,9 @@ public class StudentServiceImpl implements StudentService {
             user.setRole(Role.STUDENT);
             log.info("Promoted user_id={} to STUDENT", user.getId());
         }
+        // Mirror the student's state onto the account so sub-admins can scope
+        // user-management to their state.
+        user.setState(student.getState());
         // Seed belt-based cosmetics unlocks (idempotent union with existing).
         user.setUnlockedCosmetics(
                 CosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), student.getBelt()));

@@ -39,13 +39,13 @@ public class AdminUserController {
     public ResponseEntity<PageResponse<AdminUserSummaryResponse>> listUsers(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Role role,
+            @RequestParam(required = false) String state,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size,
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "desc") String dir) {
-        requireAdmin();
         Pageable pageable = buildPageable(page, size, sort, dir);
-        return ResponseEntity.ok(adminUserService.listUsers(blankToNull(search), role, pageable));
+        return ResponseEntity.ok(adminUserService.listUsers(blankToNull(search), role, blankToNull(state), pageable));
     }
 
     @PostMapping("/sub-admins")
@@ -62,6 +62,20 @@ public class AdminUserController {
             @Valid @RequestBody RoleChangeRequest request) {
         requireAdmin();
         return ResponseEntity.ok(adminUserService.changeRole(id, request));
+    }
+
+    // ── Block / Unblock ──
+    // Open to ADMIN + SUB_ADMIN. The service enforces state-scoping (a
+    // SUB_ADMIN may only touch users in their managedState) and blocks
+    // self / ADMIN targets.
+    @PatchMapping("/users/{id}/block")
+    public ResponseEntity<AdminUserSummaryResponse> blockUser(@PathVariable Long id) {
+        return ResponseEntity.ok(adminUserService.setBlocked(id, true));
+    }
+
+    @PatchMapping("/users/{id}/unblock")
+    public ResponseEntity<AdminUserSummaryResponse> unblockUser(@PathVariable Long id) {
+        return ResponseEntity.ok(adminUserService.setBlocked(id, false));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

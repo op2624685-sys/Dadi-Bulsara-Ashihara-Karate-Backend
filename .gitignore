@@ -8,7 +8,12 @@ target/
 *.env
 *.env.example
 
+# locally-uploaded images (dev fallback for the R2 storage service)
+uploads/
+!/uploads/.gitkeep
+
 app.log
+backend-run.log
 
 ### STS ###
 .apt_generated

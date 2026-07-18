@@ -16,14 +16,16 @@ public record AdminUserSummaryResponse(
         String lastName,
         Role role,
         String managedState,
+        String state,
         boolean emailVerified,
         boolean enabled,
+        boolean blocked,
         Instant createdAt
 ) {
     public static AdminUserSummaryResponse of(UserEntity u) {
         return new AdminUserSummaryResponse(
                 u.getId(), u.getEmail(), u.getFirstName(), u.getLastName(),
-                u.getRole(), u.getManagedState(), u.isEmailVerified(),
-                u.isEnabled(), u.getCreatedAt());
+                u.getRole(), u.getManagedState(), u.getState(), u.isEmailVerified(),
+                u.isEnabled(), u.isBlocked(), u.getCreatedAt());
     }
 }

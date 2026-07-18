@@ -215,6 +215,11 @@ public class TeacherServiceImpl implements TeacherService {
         if (req.seminarsGiven() != null) teacher.setSeminarsGiven(req.seminarsGiven());
 
         teacher = teacherRepository.save(teacher);
+        // Keep the account's state in sync so sub-admin scoping stays correct.
+        if (req.state() != null) {
+            currentUser.setState(teacher.getState());
+            userRepository.save(currentUser);
+        }
         log.info("Teacher record updated: id={} name={} {}", teacher.getId(),
                 teacher.getFirstName(), teacher.getLastName());
         return toResponse(teacher);
@@ -417,6 +422,8 @@ public class TeacherServiceImpl implements TeacherService {
         userRepository.findById(teacher.getUserId()).ifPresent(user -> {
             user.setUnlockedCosmetics(
                     CosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), teacher.getBelt()));
+            // Mirror the teacher's state onto the account for sub-admin scoping.
+            user.setState(teacher.getState());
             userRepository.save(user);
         });
     }
