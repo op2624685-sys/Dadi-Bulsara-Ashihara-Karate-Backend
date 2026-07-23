@@ -30,6 +30,7 @@ public class CosmeticsBackfillRunner {
     private final UserRepository userRepository;
     private final StudentRepository studentRepository;
     private final TeacherRepository teacherRepository;
+    private final CosmeticCatalogue cosmeticCatalogue;
 
     @PostConstruct
     public void backfill() {
@@ -44,13 +45,13 @@ public class CosmeticsBackfillRunner {
             List<String> unlocks;
             StudentEntity student = studentRepository.findByUserId(user.getId()).orElse(null);
             if (student != null && isNotBlank(student.getBelt())) {
-                unlocks = CosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), student.getBelt());
+                unlocks = cosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), student.getBelt());
             } else {
                 TeacherEntity teacher = teacherRepository.findByUserId(user.getId()).orElse(null);
                 if (teacher != null && isNotBlank(teacher.getBelt())) {
-                    unlocks = CosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), teacher.getBelt());
+                    unlocks = cosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), teacher.getBelt());
                 } else if (user.getRole() == Role.ADMIN || user.getRole() == Role.SUB_ADMIN) {
-                    unlocks = CosmeticCatalogue.allIds();
+                    unlocks = cosmeticCatalogue.allIds();
                 } else {
                     // Bare USER account — no profile yet. Seeded when they apply.
                     continue;

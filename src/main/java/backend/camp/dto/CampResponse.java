@@ -1,6 +1,8 @@
 package backend.camp.dto;
 
 import backend.camp.CampEntity;
+import backend.camp.CampParticipant;
+import backend.camp.CampReward;
 import backend.camp.CampStatus;
 import backend.camp.Instructor;
 import backend.camp.ScheduleDay;
@@ -36,6 +38,8 @@ public record CampResponse(
         List<Instructor> instructors,
         List<ScheduleDay> schedule,
         List<String> galleryImages,
+        List<CampParticipant> results,
+        List<CampReward> rewards,
         CampStatus status,
         boolean published,
         Long createdById
@@ -63,6 +67,8 @@ public record CampResponse(
                 c.getInstructors(),
                 c.getSchedule(),
                 c.getGalleryImages(),
+                c.getResults(),
+                c.getRewards(),
                 c.getStatus(),
                 c.isPublished(),
                 c.getCreatedById());

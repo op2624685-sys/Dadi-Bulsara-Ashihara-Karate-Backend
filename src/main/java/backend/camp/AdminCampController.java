@@ -11,9 +11,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -22,8 +25,16 @@ import java.util.Set;
  * declared BEFORE the broad {@code /api/v1/admin/**} rule so a SUB_ADMIN hitting
  * these endpoints gets a 403 (camps are admin-only; sub-admins manage events).
  *
- * <p>Exposes the full CRUD + publish/unpublish lifecycle. Create returns a
- * hidden DRAFT (201); the camp is announced later via {@code PATCH /{id}/publish}.
+ * <p>Two create/update paths:
+ * <ul>
+ *   <li>{@code POST /admin/camps} + {@code PUT /admin/camps/{id}} — JSON
+ *       bodies for programmatic updates and the "no image change" re-edit.</li>
+ *   <li>{@code POST /admin/camps/new} + {@code PUT /admin/camps/{id}/new} —
+ *       multipart bodies with a {@code payload} JSON part plus optional
+ *       image parts. The server uploads the images and saves the row in
+ *       one shot from the form's perspective.</li>
+ * </ul>
+ * </p>
  */
 @RestController
 @RequestMapping("/api/v1/admin/camps")
@@ -57,10 +68,38 @@ public class AdminCampController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
+    /** Multipart create — uploads the images and saves the row in one call. */
+    @PostMapping(value = "/new", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<CampResponse> createWithImages(
+            @RequestPart("payload") @Valid CampCreateRequest payload,
+            @RequestPart(value = "heroImage", required = false) MultipartFile heroImage,
+            @RequestPart(value = "aboutImage0", required = false) MultipartFile aboutImage0,
+            @RequestPart(value = "aboutImage1", required = false) MultipartFile aboutImage1,
+            @RequestPart(value = "galleryImages", required = false) List<MultipartFile> galleryImages,
+            @RequestPart(value = "instructorImages", required = false) List<MultipartFile> instructorImages) {
+        CampResponse created = campService.createWithImages(
+                payload, heroImage, aboutImage0, aboutImage1, galleryImages, instructorImages);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<CampResponse> update(
             @PathVariable Long id, @Valid @RequestBody CampUpdateRequest request) {
         return ResponseEntity.ok(campService.update(id, request));
+    }
+
+    /** Multipart update — same shape as create. */
+    @PutMapping(value = "/{id}/new", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<CampResponse> updateWithImages(
+            @PathVariable Long id,
+            @RequestPart("payload") @Valid CampUpdateRequest payload,
+            @RequestPart(value = "heroImage", required = false) MultipartFile heroImage,
+            @RequestPart(value = "aboutImage0", required = false) MultipartFile aboutImage0,
+            @RequestPart(value = "aboutImage1", required = false) MultipartFile aboutImage1,
+            @RequestPart(value = "galleryImages", required = false) List<MultipartFile> galleryImages,
+            @RequestPart(value = "instructorImages", required = false) List<MultipartFile> instructorImages) {
+        return ResponseEntity.ok(campService.updateWithImages(
+                id, payload, heroImage, aboutImage0, aboutImage1, galleryImages, instructorImages));
     }
 
     @DeleteMapping("/{id}")

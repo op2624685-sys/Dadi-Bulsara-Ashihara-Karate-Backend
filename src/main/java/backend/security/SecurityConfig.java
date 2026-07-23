@@ -87,9 +87,14 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/v1/students/register").authenticated()
                     // A student's own application — only visible to the applicant.
                     .requestMatchers(HttpMethod.GET, "/api/v1/students/me").hasRole("STUDENT")
+                    // Unified current-user identity bootstrap — any authenticated user.
+                    .requestMatchers(HttpMethod.GET, "/api/v1/user/me").authenticated()
                     // Registration document upload — any authenticated applicant
                     // (student/teacher signing up) can upload their KYC docs here.
-                    // Distinct path from /api/v1/admin/upload (admin-only CMS).
+                    // The legacy /api/v1/admin/upload endpoint has been removed;
+                    // admin CMS uploads now happen via the resource's own
+                    // multipart create/update endpoint (e.g. /admin/cosmetics/new,
+                    // /admin/camps/new).
                     .requestMatchers(HttpMethod.POST, "/api/v1/uploads/registration").authenticated()
                     // Public student directory (list + detail) — GETs only.
                     .requestMatchers("/api/v1/students/**").permitAll()
@@ -99,6 +104,8 @@ public class SecurityConfig {
                     // admin routes below stay protected.
                     .requestMatchers(HttpMethod.GET, "/api/v1/camps/**").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/events/**").permitAll()
+                    // Public cosmetic catalogue (GET only) — drives the frontend grid.
+                    .requestMatchers(HttpMethod.GET, "/api/v1/cosmetics").permitAll()
                     // Camps admin: ADMIN only. MUST precede the broad
                     // /api/v1/admin/** rule (first-match-wins) so a SUB_ADMIN
                     // hitting camp admin endpoints gets a 403.

@@ -104,6 +104,12 @@ public class EventEntity {
     @Column(name = "participants", columnDefinition = "jsonb")
     private List<Participant> participants = new ArrayList<>();
 
+    /** Per-placement prizes (1st/2nd/3rd → cosmetic id). JSON with the row. */
+    @Builder.Default
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "rewards", columnDefinition = "jsonb")
+    private List<EventReward> rewards = new ArrayList<>();
+
     /**
      * DRAFT flag. Created {@code false} (hidden), flipped via publish. Public
      * endpoints only return published events.

@@ -51,6 +51,7 @@ public class EventServiceImpl implements EventService {
 
     private final EventRepository eventRepository;
     private final SecurityService securityService;
+    private final backend.cosmetic.CosmeticService cosmeticService;
 
     // ─────────────────────────────────────────────────────────────────────
     // Sub-admin scoping (copied from TeacherServiceImpl, retyped for EventEntity)
@@ -156,12 +157,14 @@ public class EventServiceImpl implements EventService {
                 .highlight(req.highlight())
                 .state(state)
                 .participants(nullToEmpty(req.participants()))
+                .rewards(nullToEmpty(req.rewards()))
                 // A new event always starts hidden — announced later via publish.
                 .published(false)
                 .createdById(creatorId)
                 .build();
 
         event = eventRepository.save(event);
+        grantRewards(event);
         log.info("Event created (DRAFT): id={} slug={} title='{}' state={} by userId={}",
                 event.getId(), event.getSlug(), event.getTitle(), event.getState(), creatorId);
         return EventResponse.of(event, deriveStatus(event, LocalDate.now()));
@@ -183,6 +186,7 @@ public class EventServiceImpl implements EventService {
         if (req.totalParticipants() != null) event.setTotalParticipants(req.totalParticipants());
         if (req.highlight() != null)         event.setHighlight(req.highlight());
         if (req.participants() != null)      event.setParticipants(req.participants());
+        if (req.rewards() != null)          event.setRewards(req.rewards());
         if (req.state() != null) {
             // Coerce to the caller's scope so a sub-admin can never move an
             // event into another state; then re-check the (possibly new) state.
@@ -190,7 +194,9 @@ public class EventServiceImpl implements EventService {
             assertWithinScope(event);
         }
 
+        boolean rewardChange = req.participants() != null || req.rewards() != null;
         event = eventRepository.save(event);
+        if (rewardChange) grantRewards(event);
         log.info("Event updated: id={} slug={} state={}", event.getId(), event.getSlug(), event.getState());
         return EventResponse.of(event, deriveStatus(event, LocalDate.now()));
     }
@@ -274,5 +280,40 @@ public class EventServiceImpl implements EventService {
 
     private static boolean isNotBlank(String s) {
         return s != null && !s.isBlank();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Reward grant — when an admin saves results, every placing participant
+    // that is linked to a registered user gets the cosmetic assigned to
+    // their rank (1st/2nd/3rd) in the event's `rewards` map.
+    // ─────────────────────────────────────────────────────────────────────────
+    private void grantRewards(EventEntity event) {
+        if (event.getRewards() == null || event.getRewards().isEmpty()) return;
+        if (event.getParticipants() == null) return;
+        for (Participant p : event.getParticipants()) {
+            if (p.getUserId() == null || isBlank(p.getPlacement())) continue;
+            Integer rank = placementToRank(p.getPlacement());
+            if (rank == null) continue;
+            EventReward reward = event.getRewards().stream()
+                    .filter(r -> r.getRank() == rank)
+                    .findFirst().orElse(null);
+            if (reward != null && isNotBlank(reward.getCosmeticId())) {
+                cosmeticService.grantCosmetic(p.getUserId(), reward.getCosmeticId());
+            }
+        }
+    }
+
+    /** Maps "1st"/"2nd"/"3rd" → 1/2/3; null for any other value. */
+    private static Integer placementToRank(String placement) {
+        if (placement == null) return null;
+        String p = placement.trim().toLowerCase();
+        if (p.startsWith("1")) return 1;
+        if (p.startsWith("2")) return 2;
+        if (p.startsWith("3")) return 3;
+        return null;
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 }

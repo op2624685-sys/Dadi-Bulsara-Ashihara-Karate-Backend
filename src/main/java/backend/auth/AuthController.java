@@ -152,11 +152,10 @@ public class AuthController {
     }
 
     private static String ip(HttpServletRequest req) {
-        String xff = req.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int comma = xff.indexOf(',');
-            return (comma > 0 ? xff.substring(0, comma) : xff).trim();
-        }
+        // In production, server.forward-headers-strategy=framework lets the
+        // trusted reverse proxy populate getRemoteAddr(). Do not read
+        // X-Forwarded-For directly here; clients can spoof that header unless
+        // the edge proxy strips/rebuilds it.
         return req.getRemoteAddr() != null ? req.getRemoteAddr() : "unknown";
     }
 }

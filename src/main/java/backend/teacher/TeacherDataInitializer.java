@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,7 @@ import java.util.List;
  * applications routed to them. Credentials are dev-only and logged at startup.
  */
 @Component
+@Profile("!prod")
 @Order(1)
 @RequiredArgsConstructor
 public class TeacherDataInitializer implements CommandLineRunner {
@@ -93,7 +95,7 @@ public class TeacherDataInitializer implements CommandLineRunner {
             TeacherEntity.builder()
                 .firstName("Dadi").lastName("Bulsara")
                 .email("dadi@ashihara.in").phone("+91 98765 43210").age(52)
-                .belt("Red-Black").rank("Hachidan").danGrade(8)
+                .belt("Black").rank("Hachidan").danGrade(8)
                 .state("Maharashtra").city("Mumbai")
                 .dojoName("Bulsara Ashihara Karate Dojo").dojoLocation("Mumbai, Maharashtra")
                 .dojoLat(19.0760).dojoLng(72.8777)
@@ -159,7 +161,7 @@ public class TeacherDataInitializer implements CommandLineRunner {
             TeacherEntity.builder()
                 .firstName("Arun").lastName("Menon")
                 .email("arun@ashihara.in").phone("+91 98765 43213").age(45)
-                .belt("Red-White").rank("Rokudan").danGrade(6)
+                .belt("Black").rank("Rokudan").danGrade(6)
                 .state("Tamil Nadu").city("Chennai")
                 .dojoName("Menon Technical Training Center").dojoLocation("Chennai, Tamil Nadu")
                 .dojoLat(13.0827).dojoLng(80.2707)
@@ -199,8 +201,7 @@ public class TeacherDataInitializer implements CommandLineRunner {
                     .build();
             teacherUser = userRepository.save(teacherUser);
             t.setUserId(teacherUser.getId());
-            log.warn("Seeded teacher account  email='{}'  password='{}'  — CHANGE IN PRODUCTION",
-                    email, SEED_TEACHER_PASSWORD);
+            log.warn("Seeded teacher account email='{}' with dev password.", email);
         }
         teacherRepository.saveAll(saved);
 

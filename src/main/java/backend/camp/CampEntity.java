@@ -140,6 +140,18 @@ public class CampEntity {
     @Column(name = "gallery_images", columnDefinition = "jsonb")
     private List<String> galleryImages = new ArrayList<>();
 
+    /** Results roster (participant rows + placement + user-link). JSON with the row. */
+    @Builder.Default
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "results", columnDefinition = "jsonb")
+    private List<CampParticipant> results = new ArrayList<>();
+
+    /** Per-placement prizes (rank → cosmetic id). JSON with the row. */
+    @Builder.Default
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "rewards", columnDefinition = "jsonb")
+    private List<CampReward> rewards = new ArrayList<>();
+
     /** Stored status (UPCOMING/PAST) — edited by an admin, not derived. */
     @Builder.Default
     @Enumerated(EnumType.STRING)

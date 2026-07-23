@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +25,7 @@ import java.util.List;
  * as the frontend's {@code /img/NN.jpg} static assets.
  */
 @Component
+@Profile("!prod")
 @Order(2)
 @RequiredArgsConstructor
 public class CampDataInitializer implements CommandLineRunner {

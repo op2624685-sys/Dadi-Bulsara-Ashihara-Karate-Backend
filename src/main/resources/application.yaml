@@ -2,6 +2,13 @@ spring:
   application:
     name: karate
 
+  data:
+    redis:
+      url: ${REDIS_URL}
+      repositories:
+        enabled: false   # We use Redis only for caching, not as a data store.
+                         # This stops Spring Data Redis from scanning JPA repos.
+
   datasource:
     url: ${DB_URL_KARATE}
     username: ${DB_USERNAME_KARATE}
@@ -67,8 +74,12 @@ app:
   cookies:
     secure: ${COOKIES_SECURE:false}        # set to true behind HTTPS in prod
 
-  # Image storage (Cloudflare R2, with a local ./uploads fallback for dev).
-  # The R2_*_KARATE values are loaded from .env by KarateApplication#main.
+  # Image storage. Exactly one provider is active, chosen by its `enabled` flag:
+  #   * app.storage.cloudinary.enabled=true  -> Cloudinary
+  #   * app.storage.r2.enabled=true           -> Cloudflare R2 (S3-compatible)
+  #   * neither enabled                        -> local ./uploads dev fallback
+  # The R2_*_KARATE / CLOUDINARY_*_KARATE values are loaded from .env by
+  # KarateApplication#main.
   storage:
     r2:
       enabled: ${R2_ENABLED_KARATE:false}
@@ -77,6 +88,11 @@ app:
       secret-key: ${R2_SECRET_KEY_KARATE:}
       bucket: ${R2_BUCKET_KARATE:}
       public-url: ${R2_PUBLIC_URL_KARATE:}
+    cloudinary:
+      enabled: ${CLOUDINARY_ENABLED_KARATE:true}
+      cloud-name: ${CLOUDINARY_CLOUD_NAME}
+      api-key: ${CLOUDINARY_API_KEY}
+      api-secret: ${CLOUDINARY_API_SECRET}
 
   # Seed credentials for the developer admin account (AdminUserSeeder).
   # Override via ADMIN_SEED_EMAIL / ADMIN_SEED_PASSWORD env vars.

@@ -8,6 +8,7 @@ import backend.user.EquippedCosmetics;
 import backend.user.Role;
 import backend.user.UserEntity;
 import backend.user.UserRepository;
+import backend.user.Belt;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
@@ -21,6 +22,10 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +42,7 @@ public class TeacherServiceImpl implements TeacherService {
     private final TeacherRepository teacherRepository;
     private final UserRepository userRepository;
     private final SecurityService securityService;
+    private final CosmeticCatalogue cosmeticCatalogue;
 
     /**
      * Ensures a SUB_ADMIN can only touch teachers in their managed state.
@@ -65,6 +71,7 @@ public class TeacherServiceImpl implements TeacherService {
     // ---------------------------------------------------------------------
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "teachersList", key = "(#search != null ? #search : '') + '-' + (#state != null ? #state : '') + '-' + (#rank != null ? #rank : '') + '-' + (#belt != null ? #belt : '') + '-' + (#minDan != null ? #minDan : '') + '-' + #pageable.pageNumber + '-' + #pageable.pageSize")
     public PageResponse<TeacherSummaryResponse> listTeachers(
             String search, String state, String rank, String belt,
             Integer minDan, Pageable pageable) {
@@ -102,6 +109,7 @@ public class TeacherServiceImpl implements TeacherService {
     // ---------------------------------------------------------------------
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "teachers", key = "#id")
     public TeacherResponse getTeacher(Long id) {
         TeacherEntity teacher = teacherRepository.findById(id)
                 .orElseThrow(() -> new TeacherNotFoundException(id));
@@ -129,6 +137,7 @@ public class TeacherServiceImpl implements TeacherService {
     // ---------------------------------------------------------------------
     @Override
     @Transactional
+    @CacheEvict(value = {"teachersList", "adminStats"}, allEntries = true)
     public TeacherResponse register(TeacherRegistrationRequest req) {
         // Role-based guard: a teacher is already a sensei and a student is
         // already a member — neither may apply for a teacher registration. The
@@ -158,7 +167,7 @@ public class TeacherServiceImpl implements TeacherService {
                 .dojoLng(req.dojoLng())
                 .yearsTraining(req.yearsTraining())
                 .speciality(req.speciality())
-                .belt(req.belt())
+                .belt(req.belt() != null && !req.belt().isBlank() ? Belt.normalizeLabel(req.belt()) : req.belt())
                 .danGrade(req.danGrade())
                 .rank(danToRank(req.danGrade()))
                 .bio(req.bio() != null ? req.bio().trim() : null)
@@ -186,6 +195,11 @@ public class TeacherServiceImpl implements TeacherService {
     // ---------------------------------------------------------------------
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "teachersList", allEntries = true),
+        @CacheEvict(value = "users", allEntries = true),
+        @CacheEvict(value = {"teachers", "teachersAdmin"}, key = "#result.id")
+    })
     public TeacherResponse updateMine(UserEntity currentUser, TeacherUpdateRequest req) {
         TeacherEntity teacher = teacherRepository.findByUserId(currentUser.getId())
                 .orElseThrow(() -> new TeacherNotFoundException(currentUser.getId()));
@@ -195,7 +209,7 @@ public class TeacherServiceImpl implements TeacherService {
         if (req.dojoLocation() != null) teacher.setDojoLocation(req.dojoLocation().trim());
         if (req.city() != null)         teacher.setCity(req.city().isBlank() ? null : req.city().trim());
         if (req.state() != null)        teacher.setState(req.state());
-        if (req.belt() != null)         teacher.setBelt(req.belt());
+        if (req.belt() != null)         teacher.setBelt(Belt.normalizeLabel(req.belt()));
         if (req.danGrade() != null) {
             teacher.setDanGrade(req.danGrade());
             // `rank` is derived from danGrade and stored (see TeacherEntity),
@@ -260,6 +274,7 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "teachersAdmin", key = "#id")
     public TeacherResponse getForAdmin(Long id) {
         TeacherEntity teacher = teacherRepository.findById(id)
                 .orElseThrow(() -> new TeacherNotFoundException(id));
@@ -269,6 +284,10 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = {"teachersList", "adminStats", "users"}, allEntries = true),
+        @CacheEvict(value = {"teachers", "teachersAdmin"}, key = "#id")
+    })
     public TeacherResponse approve(Long id) {
         TeacherEntity teacher = teacherRepository.findById(id)
                 .orElseThrow(() -> new TeacherNotFoundException(id));
@@ -284,6 +303,10 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = {"teachersList", "adminStats"}, allEntries = true),
+        @CacheEvict(value = {"teachers", "teachersAdmin"}, key = "#id")
+    })
     public TeacherResponse reject(Long id, String reason) {
         TeacherEntity teacher = teacherRepository.findById(id)
                 .orElseThrow(() -> new TeacherNotFoundException(id));
@@ -297,6 +320,10 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = {"teachersList", "adminStats"}, allEntries = true),
+        @CacheEvict(value = {"teachers", "teachersAdmin"}, key = "#id")
+    })
     public void delete(Long id) {
         TeacherEntity teacher = teacherRepository.findById(id)
                 .orElseThrow(() -> new TeacherNotFoundException(id));
@@ -421,7 +448,7 @@ public class TeacherServiceImpl implements TeacherService {
         }
         userRepository.findById(teacher.getUserId()).ifPresent(user -> {
             user.setUnlockedCosmetics(
-                    CosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), teacher.getBelt()));
+                    cosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), teacher.getBelt()));
             // Mirror the teacher's state onto the account for sub-admin scoping.
             user.setState(teacher.getState());
             userRepository.save(user);

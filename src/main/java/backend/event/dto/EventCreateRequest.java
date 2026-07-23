@@ -1,6 +1,7 @@
 package backend.event.dto;
 
 import backend.event.EventType;
+import backend.event.EventReward;
 import backend.event.Participant;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -44,6 +45,9 @@ public record EventCreateRequest(
         @NotBlank(message = "State is required")
         String state,
 
-        List<Participant> participants
+        List<Participant> participants,
+
+        /** Per-placement prizes (rank → cosmetic id). Optional. */
+        List<EventReward> rewards
 ) {
 }

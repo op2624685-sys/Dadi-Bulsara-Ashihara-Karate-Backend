@@ -2,8 +2,6 @@ package backend.storage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -12,6 +10,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
@@ -24,16 +23,15 @@ import java.util.UUID;
 /**
  * Stores uploaded images in Cloudflare R2 (an S3-compatible object store).
  *
- * <p>Activated only when {@code app.storage.r2.enabled=true}. An
- * {@link S3Client} is built once against R2's S3-compatible endpoint using the
- * account credentials; {@code pathStyleAccessEnabled(true)} makes the bucket part
- * of the request path, which is how R2 expects requests.</p>
+ * <p>Instantiated by {@link backend.storage.StorageConfig} only when
+ * {@code app.storage.r2.enabled=true}. An {@link S3Client} is built once against
+ * R2's S3-compatible endpoint using the account credentials;
+ * {@code pathStyleAccessEnabled(true)} makes the bucket part of the request path,
+ * which is how R2 expects requests.</p>
  *
  * <p>Rejected writes (bad/empty file, SDK error) are wrapped in
  * {@link StorageException} → HTTP 502 via {@code GlobalExceptionHandler}.</p>
  */
-@Service
-@ConditionalOnProperty(prefix = "app.storage.r2", name = "enabled", havingValue = "true")
 public class R2StorageService implements StorageService {
 
     private static final Logger log = LoggerFactory.getLogger(R2StorageService.class);
@@ -53,8 +51,7 @@ public class R2StorageService implements StorageService {
      * Build the service (and the R2 client) from R2 config.
      * Only invoked when R2 is enabled, so missing credentials fail fast here.
      */
-    public R2StorageService(backend.config.StorageProperties props) {
-        backend.config.StorageProperties.R2 r2 = props.r2();
+    public R2StorageService(backend.config.StorageProperties.R2 r2) {
         this.bucket = r2.bucket();
         this.publicUrl = stripTrailingSlash(r2.publicUrl());
 
@@ -104,6 +101,45 @@ public class R2StorageService implements StorageService {
             return new UploadResult(url);
         } catch (SdkException | IOException ex) {
             throw new StorageException("Failed to upload image to R2 (key=" + key + ")", ex);
+        }
+    }
+
+    @Override
+    public void delete(String url) {
+        if (url == null || url.isBlank()) return;
+        String key = extractKey(url);
+        if (key == null) {
+            log.warn("R2 delete skipped: could not parse key from url={}", url);
+            return;
+        }
+        try {
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .build());
+            log.info("R2 delete succeeded: bucket='{}' key='{}'", bucket, key);
+        } catch (SdkException ex) {
+            throw new StorageException("Failed to delete image from R2 (key=" + key + ")", ex);
+        }
+    }
+
+    /**
+     * Pull the S3 object key out of a public R2 URL. Accepts either the bare
+     * public URL (host = publicUrl) or any URL whose path starts with the
+     * bucket's key prefix.
+     */
+    private String extractKey(String url) {
+        try {
+            URI uri = URI.create(url);
+            String path = uri.getPath();
+            if (path == null || path.isBlank()) return null;
+            String trimmed = path.startsWith("/") ? path.substring(1) : path;
+            // Accept either "uploads/..." (raw key) or any leading host segments.
+            if (trimmed.startsWith(KEY_PREFIX)) return trimmed;
+            // Fallback: take the last N segments after the public URL host.
+            return null;
+        } catch (RuntimeException ex) {
+            return null;
         }
     }
 

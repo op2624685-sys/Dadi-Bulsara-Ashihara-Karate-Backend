@@ -6,6 +6,8 @@ import backend.camp.dto.CampSummaryResponse;
 import backend.camp.dto.CampUpdateRequest;
 import backend.camp.exception.CampNotFoundException;
 import backend.security.SecurityService;
+import backend.storage.StorageException;
+import backend.storage.StorageService;
 import backend.teacher.dto.PageResponse;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -51,6 +54,8 @@ public class CampServiceImpl implements CampService {
 
     private final CampRepository campRepository;
     private final SecurityService securityService;
+    private final backend.cosmetic.CosmeticService cosmeticService;
+    private final StorageService storageService;
 
     // ─────────────────────────────────────────────────────────────────────
     // Public reads
@@ -112,6 +117,45 @@ public class CampServiceImpl implements CampService {
     // ─────────────────────────────────────────────────────────────────────
     @Override
     public CampResponse create(CampCreateRequest req) {
+        // Legacy JSON path: the caller has already uploaded any images and
+        // baked the URLs into the request. No storage activity here.
+        return doCreate(req);
+    }
+
+    @Override
+    public CampResponse createWithImages(CampCreateRequest payload,
+                                          MultipartFile heroImage,
+                                          MultipartFile aboutImage0,
+                                          MultipartFile aboutImage1,
+                                          List<MultipartFile> galleryImages,
+                                          List<MultipartFile> instructorImages) {
+        // Deliberately NOT @Transactional — the storage uploads must not be
+        // inside a DB transaction. Upload all images first; if any upload
+        // fails, best-effort delete the ones that already succeeded. If the
+        // DB save then fails, best-effort delete again.
+        UploadedImages uploaded = new UploadedImages();
+        try {
+            uploaded.hero = uploadIfPresent(heroImage);
+            uploaded.about0 = uploadIfPresent(aboutImage0);
+            uploaded.about1 = uploadIfPresent(aboutImage1);
+            uploaded.gallery = uploadAllIfPresent(galleryImages);
+            uploaded.instructor = uploadAllIfPresent(instructorImages);
+        } catch (RuntimeException ex) {
+            uploaded.bestEffortDeleteAll(storageService, log);
+            throw ex;
+        }
+
+        CampCreateRequest enriched = mergeCreateWithUploads(payload, uploaded);
+        try {
+            return doCreate(enriched);
+        } catch (RuntimeException ex) {
+            uploaded.bestEffortDeleteAll(storageService, log);
+            throw ex;
+        }
+    }
+
+    @Transactional
+    protected CampResponse doCreate(CampCreateRequest req) {
         Long creatorId = securityService.requireCurrentUser().getId();
 
         CampEntity camp = CampEntity.builder()
@@ -135,6 +179,8 @@ public class CampServiceImpl implements CampService {
                 .instructors(nullToEmpty(req.instructors()))
                 .schedule(nullToEmpty(req.schedule()))
                 .galleryImages(nullToEmpty(req.galleryImages()))
+                .results(nullToEmpty(req.results()))
+                .rewards(nullToEmpty(req.rewards()))
                 .status(req.status() != null ? req.status() : CampStatus.UPCOMING)
                 // A new camp always starts hidden — it is announced later via publish.
                 .published(false)
@@ -142,6 +188,7 @@ public class CampServiceImpl implements CampService {
                 .build();
 
         camp = campRepository.save(camp);
+        grantRewards(camp);
         log.info("Camp created (DRAFT): id={} slug={} name='{}' by userId={}",
                 camp.getId(), camp.getSlug(), camp.getName(), creatorId);
         return CampResponse.of(camp);
@@ -149,6 +196,42 @@ public class CampServiceImpl implements CampService {
 
     @Override
     public CampResponse update(Long id, CampUpdateRequest req) {
+        // Legacy JSON path.
+        return doUpdate(id, req);
+    }
+
+    @Override
+    public CampResponse updateWithImages(Long id, CampUpdateRequest payload,
+                                          MultipartFile heroImage,
+                                          MultipartFile aboutImage0,
+                                          MultipartFile aboutImage1,
+                                          List<MultipartFile> galleryImages,
+                                          List<MultipartFile> instructorImages) {
+        UploadedImages uploaded = new UploadedImages();
+        try {
+            uploaded.hero = uploadIfPresent(heroImage);
+            uploaded.about0 = uploadIfPresent(aboutImage0);
+            uploaded.about1 = uploadIfPresent(aboutImage1);
+            uploaded.gallery = uploadAllIfPresent(galleryImages);
+            uploaded.instructor = uploadAllIfPresent(instructorImages);
+        } catch (RuntimeException ex) {
+            uploaded.bestEffortDeleteAll(storageService, log);
+            throw ex;
+        }
+
+        // For update, the payload already carries the existing URLs. Merge:
+        // if a slot has a new upload, prefer it; else keep what the payload has.
+        CampUpdateRequest enriched = mergeUpdateWithUploads(payload, uploaded);
+        try {
+            return doUpdate(id, enriched);
+        } catch (RuntimeException ex) {
+            uploaded.bestEffortDeleteAll(storageService, log);
+            throw ex;
+        }
+    }
+
+    @Transactional
+    protected CampResponse doUpdate(Long id, CampUpdateRequest req) {
         CampEntity camp = findOrThrow(id);
 
         // PATCH semantics: only non-null fields are applied. The slug is NEVER
@@ -172,9 +255,13 @@ public class CampServiceImpl implements CampService {
         if (req.instructors() != null)     camp.setInstructors(req.instructors());
         if (req.schedule() != null)        camp.setSchedule(req.schedule());
         if (req.galleryImages() != null)   camp.setGalleryImages(req.galleryImages());
+        if (req.results() != null)         camp.setResults(req.results());
+        if (req.rewards() != null)          camp.setRewards(req.rewards());
         if (req.status() != null)          camp.setStatus(req.status());
 
+        boolean rewardChange = req.results() != null || req.rewards() != null;
         camp = campRepository.save(camp);
+        if (rewardChange) grantRewards(camp);
         log.info("Camp updated: id={} slug={}", camp.getId(), camp.getSlug());
         return CampResponse.of(camp);
     }
@@ -202,6 +289,217 @@ public class CampServiceImpl implements CampService {
         camp = campRepository.save(camp);
         log.info("Camp unpublished: id={} slug={}", camp.getId(), camp.getSlug());
         return CampResponse.of(camp);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Multipart helpers (upload + merge + cleanup)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /** Upload a single image if present (non-null and non-empty). */
+    private String uploadIfPresent(MultipartFile file) {
+        if (file == null || file.isEmpty()) return null;
+        log.info("Uploading camp image: name='{}' size={}", file.getOriginalFilename(), file.getSize());
+        return storageService.upload(file).url();
+    }
+
+    /** Upload each non-empty file; returns the URLs in the same order. */
+    private List<String> uploadAllIfPresent(List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) return new ArrayList<>();
+        List<String> urls = new ArrayList<>(files.size());
+        for (MultipartFile f : files) {
+            urls.add(uploadIfPresent(f));
+        }
+        return urls;
+    }
+
+    /**
+     * For create: build a {@link CampCreateRequest} that has the freshly
+     * uploaded URLs merged in. The payload's existing image fields are
+     * overridden by the uploads (the form sends them as null/empty to
+     * signal "use the new file").
+     */
+    private CampCreateRequest mergeCreateWithUploads(CampCreateRequest payload, UploadedImages u) {
+        List<String> aboutImages = new ArrayList<>(2);
+        if (u.about0 != null) aboutImages.add(u.about0);
+        else if (payload.aboutImages() != null && payload.aboutImages().size() > 0) aboutImages.add(payload.aboutImages().get(0));
+        if (u.about1 != null) aboutImages.add(u.about1);
+        else if (payload.aboutImages() != null && payload.aboutImages().size() > 1) aboutImages.add(payload.aboutImages().get(1));
+
+        // Galleries: prefer new uploads; append any extra payload URLs that
+        // don't have a corresponding new file (e.g. a user reorders but
+        // doesn't replace them all).
+        List<String> gallery = new ArrayList<>();
+        int payloadGalleryIdx = 0;
+        for (String url : u.gallery) {
+            if (url != null) {
+                gallery.add(url);
+            } else if (payload.galleryImages() != null && payloadGalleryIdx < payload.galleryImages().size()) {
+                gallery.add(payload.galleryImages().get(payloadGalleryIdx++));
+            }
+        }
+        // Append any remaining payload gallery URLs that didn't have a slot.
+        if (payload.galleryImages() != null) {
+            while (payloadGalleryIdx < payload.galleryImages().size()) {
+                gallery.add(payload.galleryImages().get(payloadGalleryIdx++));
+            }
+        }
+
+        // Instructors: pair uploaded images to existing instructor rows by
+        // index. An upload replaces the row's `image` field; the rest of the
+        // instructor fields are left untouched in the payload.
+        List<Instructor> payloadInstructors = payload.instructors() != null
+                ? payload.instructors() : List.<Instructor>of();
+        List<Instructor> mergedInstructors = new ArrayList<>();
+        for (int i = 0; i < payloadInstructors.size(); i++) {
+            Instructor orig = payloadInstructors.get(i);
+            String newImage = (u.instructor != null && i < u.instructor.size()) ? u.instructor.get(i) : null;
+            String image = newImage != null ? newImage : orig.getImage();
+            mergedInstructors.add(Instructor.builder()
+                    .id(orig.getId())
+                    .name(orig.getName())
+                    .grade(orig.getGrade())
+                    .role(orig.getRole())
+                    .origin(orig.getOrigin())
+                    .image(image)
+                    .build());
+        }
+
+        return new CampCreateRequest(
+                payload.name(),
+                payload.subtitle(),
+                payload.location(),
+                payload.state(),
+                payload.year(),
+                payload.duration(),
+                payload.participants(),
+                payload.sessions(),
+                payload.instructorCount(),
+                u.hero != null ? u.hero : payload.heroImage(),
+                aboutImages,
+                payload.quote(),
+                payload.quoteAuthor(),
+                payload.description(),
+                payload.kana(),
+                payload.pillars(),
+                mergedInstructors,
+                payload.schedule(),
+                gallery,
+                payload.results(),
+                payload.rewards(),
+                payload.status());
+    }
+
+    /**
+     * For update: the payload already carries the existing URLs (PATCH
+     * semantics). If a new file is uploaded for a slot, the new URL wins;
+     * otherwise the payload's URL is kept. If the payload sends a slot as
+     * null AND there's no new file, the field is left unchanged
+     * (doUpdate's PATCH rules will skip it).
+     */
+    private CampUpdateRequest mergeUpdateWithUploads(CampUpdateRequest payload, UploadedImages u) {
+        // aboutImages: same merging as create.
+        List<String> aboutImages = null;
+        if (payload.aboutImages() != null || u.about0 != null || u.about1 != null) {
+            aboutImages = new ArrayList<>(2);
+            if (u.about0 != null) aboutImages.add(u.about0);
+            else if (payload.aboutImages() != null && !payload.aboutImages().isEmpty())
+                aboutImages.add(payload.aboutImages().get(0));
+            if (u.about1 != null) aboutImages.add(u.about1);
+            else if (payload.aboutImages() != null && payload.aboutImages().size() > 1)
+                aboutImages.add(payload.aboutImages().get(1));
+        }
+
+        // gallery: same as create.
+        List<String> gallery = null;
+        if (payload.galleryImages() != null || (u.gallery != null && !u.gallery.isEmpty())) {
+            gallery = new ArrayList<>();
+            int payloadIdx = 0;
+            List<String> payloadGallery = payload.galleryImages() != null ? payload.galleryImages() : List.<String>of();
+            for (String url : u.gallery) {
+                if (url != null) {
+                    gallery.add(url);
+                } else if (payloadIdx < payloadGallery.size()) {
+                    gallery.add(payloadGallery.get(payloadIdx++));
+                }
+            }
+            while (payloadIdx < payloadGallery.size()) {
+                gallery.add(payloadGallery.get(payloadIdx++));
+            }
+        }
+
+        // instructors: same pairing by index.
+        List<Instructor> mergedInstructors = null;
+        if (payload.instructors() != null) {
+            mergedInstructors = new ArrayList<>();
+            for (int i = 0; i < payload.instructors().size(); i++) {
+                Instructor orig = payload.instructors().get(i);
+                String newImage = (u.instructor != null && i < u.instructor.size()) ? u.instructor.get(i) : null;
+                String image = newImage != null ? newImage : orig.getImage();
+                mergedInstructors.add(Instructor.builder()
+                        .id(orig.getId())
+                        .name(orig.getName())
+                        .grade(orig.getGrade())
+                        .role(orig.getRole())
+                        .origin(orig.getOrigin())
+                        .image(image)
+                        .build());
+            }
+        }
+
+        return new CampUpdateRequest(
+                payload.name(),
+                payload.subtitle(),
+                payload.location(),
+                payload.state(),
+                payload.year(),
+                payload.duration(),
+                payload.participants(),
+                payload.sessions(),
+                payload.instructorCount(),
+                u.hero != null ? u.hero : payload.heroImage(),
+                aboutImages,
+                payload.quote(),
+                payload.quoteAuthor(),
+                payload.description(),
+                payload.kana(),
+                payload.pillars(),
+                mergedInstructors,
+                payload.schedule(),
+                gallery,
+                payload.results(),
+                payload.rewards(),
+                payload.status());
+    }
+
+    /**
+     * Bookkeeping for a single multipart-create: every uploaded URL we need to
+     * roll back if anything goes wrong. {@code gallery} and {@code instructor}
+     * are sized to match the corresponding payload lists — {@code null}
+     * entries are slots the user didn't replace.
+     */
+    private static final class UploadedImages {
+        String hero;
+        String about0;
+        String about1;
+        List<String> gallery = new ArrayList<>();
+        List<String> instructor = new ArrayList<>();
+
+        void bestEffortDeleteAll(StorageService storage, Logger log) {
+            deleteOne(storage, log, hero);
+            deleteOne(storage, log, about0);
+            deleteOne(storage, log, about1);
+            if (gallery != null) for (String u : gallery) deleteOne(storage, log, u);
+            if (instructor != null) for (String u : instructor) deleteOne(storage, log, u);
+        }
+
+        private static void deleteOne(StorageService storage, Logger log, String url) {
+            if (url == null) return;
+            try {
+                storage.delete(url);
+            } catch (StorageException ex) {
+                log.warn("Best-effort delete of '{}' after a failed save failed: {}", url, ex.getMessage());
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -247,5 +545,40 @@ public class CampServiceImpl implements CampService {
 
     private static boolean isNotBlank(String s) {
         return s != null && !s.isBlank();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Reward grant — when an admin saves results, every placing participant
+    // that is linked to a registered user gets the cosmetic assigned to
+    // their rank (1st/2nd/3rd) in the camp's `rewards` map.
+    // ─────────────────────────────────────────────────────────────────────────
+    private void grantRewards(CampEntity camp) {
+        if (camp.getRewards() == null || camp.getRewards().isEmpty()) return;
+        if (camp.getResults() == null) return;
+        for (CampParticipant p : camp.getResults()) {
+            if (p.getUserId() == null || isBlank(p.getPlacement())) continue;
+            Integer rank = placementToRank(p.getPlacement());
+            if (rank == null) continue;
+            CampReward reward = camp.getRewards().stream()
+                    .filter(r -> r.getRank() == rank)
+                    .findFirst().orElse(null);
+            if (reward != null && isNotBlank(reward.getCosmeticId())) {
+                cosmeticService.grantCosmetic(p.getUserId(), reward.getCosmeticId());
+            }
+        }
+    }
+
+    /** Maps "1st"/"2nd"/"3rd" → 1/2/3; null for any other value. */
+    private static Integer placementToRank(String placement) {
+        if (placement == null) return null;
+        String p = placement.trim().toLowerCase();
+        if (p.startsWith("1")) return 1;
+        if (p.startsWith("2")) return 2;
+        if (p.startsWith("3")) return 3;
+        return null;
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 }

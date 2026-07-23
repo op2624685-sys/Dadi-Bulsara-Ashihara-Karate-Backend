@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-import backend.user.CosmeticCatalogue;
 
 /**
  * Provisions a federation administrator on a fresh database so the admin
@@ -21,11 +21,13 @@ import backend.user.CosmeticCatalogue;
  */
 @Slf4j
 @Component
+@Profile("!prod")
 @RequiredArgsConstructor
 public class AdminUserSeeder implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CosmeticCatalogue cosmeticCatalogue;
 
     @Value("${app.admin.seed-email:admin@dadibulsara.local}")
     private String seedEmail;
@@ -49,13 +51,11 @@ public class AdminUserSeeder implements CommandLineRunner {
                 .provider(Provider.LOCAL)
                 .enabled(true)
                 .emailVerified(true)
-                .unlockedCosmetics(CosmeticCatalogue.allIds()) // staff unlock everything
+                .unlockedCosmetics(cosmeticCatalogue.allIds()) // staff unlock everything
                 .build();
         userRepository.save(admin);
 
-        log.warn(
-                "Seeded admin user  email='{}'  password='{}'  — CHANGE THIS IN PRODUCTION",
-                seedEmail, seedPassword);
+        log.warn("Seeded admin user email='{}' with configured dev password.", seedEmail);
 
         seedSubAdmin();
     }
@@ -81,11 +81,10 @@ public class AdminUserSeeder implements CommandLineRunner {
                 .provider(Provider.LOCAL)
                 .enabled(true)
                 .emailVerified(true)
-                .unlockedCosmetics(CosmeticCatalogue.allIds()) // staff unlock everything
+                .unlockedCosmetics(cosmeticCatalogue.allIds()) // staff unlock everything
                 .build();
         userRepository.save(sub);
-        log.warn(
-                "Seeded sub-admin user  email='{}'  password='{}'  state='{}'  — CHANGE THIS IN PRODUCTION",
-                subEmail, "SubAdmin123!", sub.getManagedState());
+        log.warn("Seeded sub-admin user email='{}' state='{}' with dev password.",
+                subEmail, sub.getManagedState());
     }
 }

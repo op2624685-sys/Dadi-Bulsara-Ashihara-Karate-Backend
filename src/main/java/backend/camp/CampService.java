@@ -6,6 +6,7 @@ import backend.camp.dto.CampSummaryResponse;
 import backend.camp.dto.CampUpdateRequest;
 import backend.teacher.dto.PageResponse;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -35,6 +36,33 @@ public interface CampService {
 
     /** Partial update; the slug is kept stable. */
     CampResponse update(Long id, CampUpdateRequest req);
+
+    /**
+     * Multipart create: upload all provided image files, attach the resulting
+     * URLs to the request, then save. See {@link #create} for the JSON-only
+     * alternative. The {@code payload} should have all image fields
+     * {@code null} (or empty) — they're filled in by the uploads.
+     */
+    CampResponse createWithImages(CampCreateRequest payload,
+                                  MultipartFile heroImage,
+                                  MultipartFile aboutImage0,
+                                  MultipartFile aboutImage1,
+                                  List<MultipartFile> galleryImages,
+                                  List<MultipartFile> instructorImages);
+
+    /**
+     * Multipart update. Same contract as {@link #createWithImages} but
+     * applies to the existing camp. Image fields that are non-null in the
+     * payload AND have a new file part are replaced; fields with a URL but
+     * no file keep the existing URL; fields without a URL and no file
+     * resolve to {@code null}.
+     */
+    CampResponse updateWithImages(Long id, CampUpdateRequest payload,
+                                  MultipartFile heroImage,
+                                  MultipartFile aboutImage0,
+                                  MultipartFile aboutImage1,
+                                  List<MultipartFile> galleryImages,
+                                  List<MultipartFile> instructorImages);
 
     /** Delete a camp. */
     void delete(Long id);

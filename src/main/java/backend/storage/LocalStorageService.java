@@ -2,8 +2,6 @@ package backend.storage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -20,13 +18,11 @@ import java.util.UUID;
  * local filesystem and returns a {@code /uploads/...} URL served by
  * {@link backend.config.WebStaticConfig}.
  *
- * <p>Activated when R2 is disabled (or the property is absent), so local
- * development runs without any Cloudflare credentials. Same input validation as
- * {@link R2StorageService}; failures raise {@link StorageException} → HTTP 502.</p>
+ * <p>Instantiated by {@link backend.storage.StorageConfig} when neither R2 nor
+ * Cloudinary is enabled, so local development runs without any cloud
+ * credentials. Same input validation as {@link R2StorageService}; failures raise
+ * {@link StorageException} → HTTP 502.</p>
  */
-@Service
-@ConditionalOnProperty(prefix = "app.storage.r2", name = "enabled",
-        havingValue = "false", matchIfMissing = true)
 public class LocalStorageService implements StorageService {
 
     private static final Logger log = LoggerFactory.getLogger(LocalStorageService.class);
@@ -61,6 +57,30 @@ public class LocalStorageService implements StorageService {
             return new UploadResult(url);
         } catch (IOException ex) {
             throw new StorageException("Failed to write upload to local disk: " + storedName, ex);
+        }
+    }
+
+    @Override
+    public void delete(String url) {
+        if (url == null || url.isBlank()) return;
+        // Accept both "/uploads/<name>" (local URL) and "uploads/<name>" (already
+        // stripped) — the latter is what the R2-style URL path would look like.
+        String trimmed = url.startsWith("/") ? url.substring(1) : url;
+        if (!trimmed.startsWith("uploads/")) {
+            log.warn("Local delete skipped: url is not a local /uploads/ path: {}", url);
+            return;
+        }
+        Path target = UPLOAD_DIR.resolve(trimmed.substring("uploads/".length()))
+                .normalize().toAbsolutePath();
+        if (!target.startsWith(UPLOAD_DIR.toAbsolutePath().normalize())) {
+            log.warn("Local delete skipped: path traversal attempt for url={}", url);
+            return;
+        }
+        try {
+            boolean removed = Files.deleteIfExists(target);
+            log.info("Local delete attempted: path='{}' removed={}", target, removed);
+        } catch (IOException ex) {
+            throw new StorageException("Failed to delete local upload: " + target, ex);
         }
     }
 

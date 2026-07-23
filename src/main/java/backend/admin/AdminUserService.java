@@ -23,6 +23,10 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,9 +44,11 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final SecurityService securityService;
+    private final CosmeticCatalogue cosmeticCatalogue;
 
     // ── List ──────────────────────────────────────────────────────────────────
     @Transactional(readOnly = true)
+    @Cacheable(value = "usersList", key = "(#search != null ? #search : '') + '-' + (#role != null ? #role.name() : '') + '-' + (#state != null ? #state : '') + '-' + #pageable.pageNumber + '-' + #pageable.pageSize")
     public PageResponse<AdminUserSummaryResponse> listUsers(
             String search, Role role, String state, Pageable pageable) {
 
@@ -78,6 +84,7 @@ public class AdminUserService {
 
     // ── Create sub-admin ────────────────────────────────────────────────────────
     @Transactional
+    @CacheEvict(value = {"usersList", "adminStats"}, allEntries = true)
     public AdminUserSummaryResponse createSubAdmin(SubAdminCreateRequest req) {
         String email = req.email().toLowerCase().trim();
         if (userRepository.existsByEmailIgnoreCase(email)) {
@@ -93,7 +100,7 @@ public class AdminUserService {
                 .provider(Provider.LOCAL)
                 .enabled(true)
                 .emailVerified(true) // admin-created, no email verification step
-                .unlockedCosmetics(CosmeticCatalogue.allIds()) // staff unlock everything
+                .unlockedCosmetics(cosmeticCatalogue.allIds()) // staff unlock everything
                 .build();
         sub = userRepository.save(sub);
         log.info("Created SUB_ADMIN id={} email={} state={}", sub.getId(), email, sub.getManagedState());
@@ -102,6 +109,9 @@ public class AdminUserService {
 
     // ── Change role ─────────────────────────────────────────────────────────────
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = {"usersList", "adminStats", "users"}, allEntries = true)
+    })
     public AdminUserSummaryResponse changeRole(Long id, RoleChangeRequest req) {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found: " + id));
@@ -124,7 +134,7 @@ public class AdminUserService {
         user.setRole(req.role());
         // Staff roles unlock every cosmetic (no belt → no partial unlocks).
         if (req.role() == Role.ADMIN || req.role() == Role.SUB_ADMIN) {
-            user.setUnlockedCosmetics(CosmeticCatalogue.allIds());
+            user.setUnlockedCosmetics(cosmeticCatalogue.allIds());
         }
         user = userRepository.save(user);
         log.info("Changed role for user_id={} to {} (state={})", id, req.role(), user.getManagedState());
@@ -133,6 +143,9 @@ public class AdminUserService {
 
     // ── Block / Unblock ────────────────────────────────────────────────────────
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = {"usersList", "adminStats", "users"}, allEntries = true)
+    })
     public AdminUserSummaryResponse setBlocked(Long id, boolean blocked) {
         UserEntity caller = securityService.getCurrentUserOrNull();
         if (caller == null
