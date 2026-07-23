@@ -59,6 +59,19 @@ public class UserEntity implements UserDetails {
     @Builder.Default
     private boolean enabled = true;
 
+    /**
+     * Admin-imposed ban. Separate from {@code enabled} (which tracks
+     * email-verification / account activation) so a verified account can be
+     * blocked without losing its verification state. {@link #isEnabled()}
+     * folds both flags together, so a blocked account is rejected at login.
+     */
+    // columnDefinition carries a DEFAULT so Hibernate's `ddl-auto: update` can
+    // add this NOT NULL column to the already-populated app_user table (Postgres
+    // rejects `ADD COLUMN ... NOT NULL` without a default on a non-empty table).
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private boolean blocked = false;
+
     @Column(name = "email_verified", nullable = false)
     @Builder.Default
     private boolean emailVerified = false;
@@ -78,6 +91,16 @@ public class UserEntity implements UserDetails {
      */
     @Column(name = "managed_state", length = 80)
     private String managedState;
+
+    /**
+     * The Indian state this account belongs to. Null for ADMIN/SUB_ADMIN and
+     * for accounts that haven't completed a student/teacher profile yet.
+     * Mirrored from the linked student/teacher profile at registration time
+     * (see StudentServiceImpl / TeacherServiceImpl). Lets a SUB_ADMIN scope
+     * user-management actions to the state they own.
+     */
+    @Column(name = "state", length = 80)
+    private String state;
 
     /**
      * The avatar the user has equipped. Null → the role-default look
@@ -137,6 +160,6 @@ public class UserEntity implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return enabled;
+        return enabled && !blocked;
     }
 }
