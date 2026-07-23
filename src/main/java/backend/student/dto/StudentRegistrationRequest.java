@@ -55,6 +55,12 @@ public record StudentRegistrationRequest(
 
         String photoUrl,
 
+        /** Uploaded KYC document URLs (returned by the registration upload endpoint). */
+        String aadharUrl,
+        String passportPhotoUrl,
+        String beltCertificateUrl,
+        String signatureUrl,
+
         List<String> achievements,
 
         @AssertTrue(message = "You must agree to the declaration")
