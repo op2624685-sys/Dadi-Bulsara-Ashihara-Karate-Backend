@@ -26,7 +26,16 @@ public record TeacherAdminSummaryResponse(
         TeacherStatus status,
         String rejectionReason,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        // ── Detail fields for the application-review modal ──
+        String city,
+        String dojoName,
+        String dojoLocation,
+        Integer age,
+        String bio,
+        String certifiedBy,
+        String photo,
+        String bannerUrl
 ) {
     public static TeacherAdminSummaryResponse of(TeacherEntity t) {
         return new TeacherAdminSummaryResponse(
@@ -44,6 +53,14 @@ public record TeacherAdminSummaryResponse(
                 t.getStatus(),
                 t.getRejectionReason(),
                 t.getCreatedAt(),
-                t.getUpdatedAt());
+                t.getUpdatedAt(),
+                t.getCity(),
+                t.getDojoName(),
+                t.getDojoLocation(),
+                t.getAge(),
+                t.getBio(),
+                t.getCertifiedBy(),
+                t.getPhoto(),
+                t.getBannerUrl());
     }
 }
