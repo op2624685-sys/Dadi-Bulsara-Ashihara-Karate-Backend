@@ -126,6 +126,22 @@ public class StudentEntity {
     @Column(name = "photo", length = 512)
     private String photo;
 
+    // ── Uploaded registration documents (KYC) ──────────────────────────────────
+    // URLs returned by the storage layer (R2 or local ./uploads fallback). The
+    // applicant uploads these from the registration form; an approver (sensei /
+    // admin) reviews them in the application-detail modal before accepting.
+    @Column(name = "aadhar_url", length = 512)
+    private String aadharUrl;
+
+    @Column(name = "passport_photo_url", length = 512)
+    private String passportPhotoUrl;
+
+    @Column(name = "belt_certificate_url", length = 512)
+    private String beltCertificateUrl;
+
+    @Column(name = "signature_url", length = 512)
+    private String signatureUrl;
+
     @Builder.Default
     @Column
     private Integer campsCount = 0;
