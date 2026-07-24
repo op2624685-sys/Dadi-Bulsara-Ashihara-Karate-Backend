@@ -6,8 +6,12 @@ import backend.common.exception.InvalidTokenException;
 import backend.common.exception.UserNotFoundException;
 import backend.common.exception.RateLimitExceededException;
 import backend.common.exception.TokenExpiredException;
+import backend.camp.exception.CampNotFoundException;
+import backend.event.exception.EventNotFoundException;
+import backend.storage.StorageException;
 import backend.teacher.exception.TeacherNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -15,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -53,6 +58,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiError.of(401, "Unauthorized", "AUTH_FAILED",
                         "Authentication failed", req.getRequestURI()));
+    }
+
+    // 401 — account exists and password is correct, but the account has been
+    // blocked by an admin (see UserEntity.isEnabled(), which folds in `blocked`).
+    // More specific than the generic AuthenticationException handler so the
+    // frontend can show a clear "your account is blocked" message instead of a
+    // misleading "invalid credentials" one. Placed before handleAuth so Spring
+    // resolves the most specific handler (DisabledException extends
+    // AuthenticationException).
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ApiError> handleDisabled(DisabledException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiError.of(401, "Unauthorized", "AUTH_ACCOUNT_BLOCKED",
+                        "Your account has been blocked. Please contact an administrator.", req.getRequestURI()));
     }
 
     // 401 — account exists, password matches, but email not verified yet.
@@ -120,6 +139,39 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiError.of(404, "Not Found", "STUDENT_NOT_FOUND",
                         ex.getMessage(), req.getRequestURI()));
+    }
+
+    // 404 — camp not found, or a public request for a hidden DRAFT camp
+    @ExceptionHandler(CampNotFoundException.class)
+    public ResponseEntity<ApiError> handleCampNotFound(CampNotFoundException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiError.of(404, "Not Found", "CAMP_NOT_FOUND",
+                        ex.getMessage(), req.getRequestURI()));
+    }
+
+    // 404 — event not found, or a public request for a hidden DRAFT event
+    @ExceptionHandler(EventNotFoundException.class)
+    public ResponseEntity<ApiError> handleEventNotFound(EventNotFoundException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiError.of(404, "Not Found", "EVENT_NOT_FOUND",
+                        ex.getMessage(), req.getRequestURI()));
+    }
+
+    // 502 — image storage / upload failure (Cloudflare R2 or local fallback)
+    @ExceptionHandler(StorageException.class)
+    public ResponseEntity<ApiError> handleStorage(StorageException ex, HttpServletRequest req) {
+        log.error("Storage/upload failed at {}: {}", req.getRequestURI(), ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiError.of(502, "Bad Gateway", "STORAGE_UPLOAD_FAILED",
+                        "Image upload failed: " + ex.getMessage(), req.getRequestURI()));
+    }
+
+    // 413 — uploaded file exceeds the configured max size (spring.servlet.multipart)
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> handleFileTooLarge(MaxUploadSizeExceededException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiError.of(413, "Payload Too Large", "FILE_TOO_LARGE",
+                        "Uploaded file is too large", req.getRequestURI()));
     }
 
     // 400 — bad admin argument (e.g. SUB_ADMIN without a state, self role-change)
