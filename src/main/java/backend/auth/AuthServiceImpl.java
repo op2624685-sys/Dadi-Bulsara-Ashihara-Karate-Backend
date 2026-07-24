@@ -151,6 +151,14 @@ public class AuthServiceImpl implements AuthService {
 
         // Normal rotation
         UserEntity user = existing.getUser();
+        // A blocked (disabled) account must not be issued new tokens — otherwise
+        // an already-authenticated blocked user would keep rotating their refresh
+        // token (valid up to the 30-day refresh TTL) and stay logged in forever,
+        // defeating the block. Rejecting here forces a re-authenticate, which
+        // login() also blocks (see the isEnabled() guard there).
+        if (!user.isEnabled()) {
+            throw new org.springframework.security.authentication.DisabledException("Account is disabled");
+        }
         existing.setRevoked(true);
         existing.setRevokedAt(Instant.now());
         existing.setRevokedReason("ROTATED");
