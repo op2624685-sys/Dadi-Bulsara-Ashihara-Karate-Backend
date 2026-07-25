@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +24,7 @@ import java.util.Optional;
  * Guarded by count so it never duplicates. Disable / profile-gate in production.
  */
 @Component
+@Profile("!prod")
 @Order(2)
 @RequiredArgsConstructor
 public class StudentDataInitializer implements CommandLineRunner {
@@ -72,7 +74,7 @@ public class StudentDataInitializer implements CommandLineRunner {
                     true, 2024, 7, 14, "aditya.kumar@email.com"),
             approved("Lakshmi", "Rao", 12, "White", "Karnataka", sunita,
                     false, null, 1, 2, "lakshmi.rao@email.com"),
-            approved("Karthik", "Menon", 15, "Purple", "Tamil Nadu", arun,
+            approved("Karthik", "Menon", 15, "Blue", "Tamil Nadu", arun,
                     false, null, 4, 6, "karthik.menon@email.com"),
 
             // ── PENDING applications (drive the sensei approval queue) ──────────

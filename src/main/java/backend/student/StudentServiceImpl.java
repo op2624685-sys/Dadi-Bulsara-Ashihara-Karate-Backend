@@ -11,6 +11,7 @@ import backend.user.EquippedCosmetics;
 import backend.user.Role;
 import backend.user.UserEntity;
 import backend.user.UserRepository;
+import backend.user.Belt;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -21,6 +22,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -40,12 +44,14 @@ public class StudentServiceImpl implements StudentService {
     private final TeacherRepository teacherRepository;
     private final UserRepository userRepository;
     private final SecurityService securityService;
+    private final CosmeticCatalogue cosmeticCatalogue;
 
     // ---------------------------------------------------------------------
     // Public directory
     // ---------------------------------------------------------------------
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "studentsList", key = "(#search != null ? #search : '') + '-' + (#state != null ? #state : '') + '-' + (#belt != null ? #belt : '') + '-' + #pageable.pageNumber + '-' + #pageable.pageSize")
     public PageResponse<StudentSummaryResponse> listStudents(
             String search, String state, String belt, Pageable pageable) {
         Long currentUserId = currentUserIdOrNull();
@@ -97,6 +103,7 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "students", key = "#id")
     public StudentResponse getStudent(Long id) {
         StudentEntity student = studentRepository.findById(id)
                 .orElseThrow(() -> new StudentNotFoundException(id));
@@ -108,6 +115,7 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "studentsPublic", key = "#id")
     public StudentPublicResponse getPublicStudent(Long id) {
         StudentEntity student = studentRepository.findById(id)
                 .orElseThrow(() -> new StudentNotFoundException(id));
@@ -130,6 +138,7 @@ public class StudentServiceImpl implements StudentService {
     // ---------------------------------------------------------------------
     @Override
     @Transactional
+    @CacheEvict(value = {"studentsList", "adminStats"}, allEntries = true)
     public StudentResponse register(StudentRegistrationRequest req, UserEntity currentUser) {
         // Role-based guard: a student is already a student, and a teacher may
         // not apply for student membership (product rule). Other roles
@@ -170,7 +179,7 @@ public class StudentServiceImpl implements StudentService {
                 .email(email)
                 .phone(req.mobileNumber())
                 .age(req.age())
-                .belt(req.belt())
+                .belt(req.belt() != null && !req.belt().isBlank() ? Belt.normalizeLabel(req.belt()) : req.belt())
                 .state(req.state())
                 .city(isNotBlank(req.city()) ? req.city().trim() : null)
                 .senseiId(sensei.getId())
@@ -202,7 +211,7 @@ public class StudentServiceImpl implements StudentService {
         // union — preserves any event/achievement unlocks already present).
         UserEntity user = userRepository.findById(currentUser.getId()).orElse(currentUser);
         user.setUnlockedCosmetics(
-                CosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), req.belt()));
+                cosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), req.belt()));
         userRepository.save(user);
 
         log.info("Student application submitted (PENDING): id={} name={} {} senseiId={}",
@@ -212,6 +221,11 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "studentsList", allEntries = true),
+        @CacheEvict(value = "users", allEntries = true),
+        @CacheEvict(value = {"students", "studentsPublic", "studentsAdmin"}, key = "#result.id")
+    })
     public StudentResponse updateMine(UserEntity currentUser, StudentUpdateRequest req) {
         StudentEntity student = studentRepository.findByUserId(currentUser.getId())
                 .orElseThrow(() -> new StudentNotFoundException(currentUser.getId()));
@@ -263,6 +277,10 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = {"studentsList", "adminStats", "users"}, allEntries = true),
+        @CacheEvict(value = {"students", "studentsPublic", "studentsAdmin"}, key = "#id")
+    })
     public StudentResponse approveAsTeacher(Long id, Long senseiId) {
         StudentEntity student = requireOwnedBySensei(id, senseiId);
         student.setStatus(StudentStatus.APPROVED);
@@ -276,6 +294,10 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = {"studentsList", "adminStats"}, allEntries = true),
+        @CacheEvict(value = {"students", "studentsPublic", "studentsAdmin"}, key = "#id")
+    })
     public StudentResponse rejectAsTeacher(Long id, Long senseiId, String reason) {
         StudentEntity student = requireOwnedBySensei(id, senseiId);
         student.setStatus(StudentStatus.REJECTED);
@@ -313,6 +335,7 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "studentsAdmin", key = "#id")
     public StudentResponse getForAdmin(Long id) {
         StudentEntity student = studentRepository.findById(id)
                 .orElseThrow(() -> new StudentNotFoundException(id));
@@ -321,6 +344,10 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = {"studentsList", "adminStats", "users"}, allEntries = true),
+        @CacheEvict(value = {"students", "studentsPublic", "studentsAdmin"}, key = "#id")
+    })
     public StudentResponse approve(Long id) {
         StudentEntity student = studentRepository.findById(id)
                 .orElseThrow(() -> new StudentNotFoundException(id));
@@ -334,6 +361,10 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = {"studentsList", "adminStats"}, allEntries = true),
+        @CacheEvict(value = {"students", "studentsPublic", "studentsAdmin"}, key = "#id")
+    })
     public StudentResponse reject(Long id, String reason) {
         StudentEntity student = studentRepository.findById(id)
                 .orElseThrow(() -> new StudentNotFoundException(id));
@@ -346,6 +377,10 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = {"studentsList", "adminStats"}, allEntries = true),
+        @CacheEvict(value = {"students", "studentsPublic", "studentsAdmin"}, key = "#id")
+    })
     public void delete(Long id) {
         StudentEntity student = studentRepository.findById(id)
                 .orElseThrow(() -> new StudentNotFoundException(id));
@@ -377,7 +412,7 @@ public class StudentServiceImpl implements StudentService {
         user.setState(student.getState());
         // Seed belt-based cosmetics unlocks (idempotent union with existing).
         user.setUnlockedCosmetics(
-                CosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), student.getBelt()));
+                cosmeticCatalogue.mergeUnlocks(user.getUnlockedCosmetics(), student.getBelt()));
         userRepository.save(user);
     }
 
