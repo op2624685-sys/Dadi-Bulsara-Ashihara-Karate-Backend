@@ -7,6 +7,9 @@ import backend.teacher.TeacherStatus;
 import backend.user.Role;
 import backend.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,12 +30,20 @@ public class AdminStatsService {
     private final UserRepository userRepository;
     private final SecurityService securityService;
 
+    @Autowired
+    @Lazy
+    private AdminStatsService self;
+
     @Transactional(readOnly = true)
     public AdminStatsResponse stats() {
         SecurityService.AdminScope scope = securityService.scope();
         String state = scope.state();           // null for ADMIN
         boolean global = !scope.isSubAdmin();
+        return self.getCachedStats(global, state);
+    }
 
+    @Cacheable(value = "adminStats", key = "#global + '-' + (#state != null ? #state : 'global')")
+    public AdminStatsResponse getCachedStats(boolean global, String state) {
         long totalTeachers    = global ? teacherRepository.count()
                                         : teacherRepository.countByStateIgnoreCase(state);
         long pendingTeachers  = global ? teacherRepository.countByStatus(TeacherStatus.PENDING)
