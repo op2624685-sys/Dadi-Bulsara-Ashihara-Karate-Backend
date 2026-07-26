@@ -18,7 +18,9 @@ public record StorageProperties(
         /** Master switch. When {@code true} the R2-backed service is used; otherwise the local fallback. */
         boolean r2Enabled,
         /** Cloudflare R2 (S3-compatible) connection details. */
-        R2 r2
+        R2 r2,
+        /** Cloudinary connection details (alternative to R2). */
+        Cloudinary cloudinary
 ) {
 
     /**
@@ -38,5 +40,22 @@ public record StorageProperties(
             String secretKey,
             String bucket,
             String publicUrl
+    ) {}
+
+    /**
+     * Cloudinary configuration. Mirrors the {@code app.storage.cloudinary.*} yaml keys.
+     * Active only when {@code app.storage.cloudinary.enabled=true}; the SDK is built from
+     * a {@code cloudinary://api-key:api-secret@cloud-name} URL.
+     *
+     * @param enabled   whether Cloudinary uploads are active ({@code app.storage.cloudinary.enabled})
+     * @param cloudName Cloudinary cloud name
+     * @param apiKey    Cloudinary API key
+     * @param apiSecret Cloudinary API secret
+     */
+    public record Cloudinary(
+            boolean enabled,
+            String cloudName,
+            String apiKey,
+            String apiSecret
     ) {}
 }
