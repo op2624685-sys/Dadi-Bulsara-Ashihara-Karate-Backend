@@ -18,6 +18,10 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
+
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -42,6 +46,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final EmailService emailService;
     private final ApplicationProperties props;
+    private final CosmeticCatalogue cosmeticCatalogue;
 
     // ---------------------------------------------------------------------
     // Signup
@@ -53,6 +58,7 @@ public class AuthServiceImpl implements AuthService {
     // ---------------------------------------------------------------------
     @Override
     @Transactional
+    @CacheEvict(value = "adminStats", allEntries = true)
     public MessageResponse signup(SignupRequest req, String userAgent, String ip) {
         String email = req.email().toLowerCase();
 
@@ -227,6 +233,7 @@ public class AuthServiceImpl implements AuthService {
     // ---------------------------------------------------------------------
     @Override
     @Transactional
+    @CacheEvict(value = {"users", "usersList"}, allEntries = true)
     public void resetPassword(ResetPasswordRequest req) {
         String hash = TokenHasher.sha256(req.token());
         PasswordResetToken token = passwordResetTokenRepository.findByTokenHash(hash)
@@ -256,10 +263,11 @@ public class AuthServiceImpl implements AuthService {
     // ---------------------------------------------------------------------
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "users", key = "#email")
     public UserResponse getCurrentUser(String email) {
         UserEntity user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new InvalidTokenException("User not found"));
-        return UserResponse.of(user);
+        return withEffectiveUnlocks(user);
     }
 
     // ---------------------------------------------------------------------
@@ -267,22 +275,32 @@ public class AuthServiceImpl implements AuthService {
     // ---------------------------------------------------------------------
     @Override
     @Transactional
+    @CacheEvict(value = "users", key = "#email")
     public UserResponse updateCosmetics(UpdateCosmeticsRequest req, String email) {
         UserEntity user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new InvalidTokenException("User not found"));
 
         if (req.equippedAvatarId() != null) {
-            CosmeticCatalogue.requireUnlocked(user, req.equippedAvatarId());
+            cosmeticCatalogue.requireUnlocked(user, req.equippedAvatarId());
             user.setEquippedAvatarId(req.equippedAvatarId());
         }
         if (req.equippedBannerId() != null) {
-            CosmeticCatalogue.requireUnlocked(user, req.equippedBannerId());
+            cosmeticCatalogue.requireUnlocked(user, req.equippedBannerId());
             user.setEquippedBannerId(req.equippedBannerId());
         }
         user = userRepository.save(user);
         log.info("Updated cosmetics for user_id={} avatar={} banner={}",
                 user.getId(), user.getEquippedAvatarId(), user.getEquippedBannerId());
-        return UserResponse.of(user);
+        return withEffectiveUnlocks(user);
+    }
+
+    /**
+     * Build the current-user response with belt-based unlocks computed live (so a
+     * cosmetic an admin created for the user's belt shows up immediately, without
+     * rewriting the stored {@code unlockedCosmetics} snapshot).
+     */
+    private UserResponse withEffectiveUnlocks(UserEntity user) {
+        return UserResponse.of(user, cosmeticCatalogue);
     }
 
     // ---------------------------------------------------------------------
@@ -333,6 +351,7 @@ public class AuthServiceImpl implements AuthService {
     // ---------------------------------------------------------------------
     @Override
     @Transactional
+    @CacheEvict(value = {"users", "usersList", "adminStats"}, allEntries = true)
     public void verifyEmail(String rawToken) {
         String hash = TokenHasher.sha256(rawToken);
         EmailVerificationToken token = emailVerificationTokenRepository.findByTokenHash(hash)
