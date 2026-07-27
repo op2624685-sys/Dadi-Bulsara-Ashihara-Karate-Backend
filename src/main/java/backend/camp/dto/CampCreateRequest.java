@@ -1,5 +1,7 @@
 package backend.camp.dto;
 
+import backend.camp.CampParticipant;
+import backend.camp.CampReward;
 import backend.camp.CampStatus;
 import backend.camp.Instructor;
 import backend.camp.ScheduleDay;
@@ -46,6 +48,12 @@ public record CampCreateRequest(
         List<Instructor> instructors,
         List<ScheduleDay> schedule,
         List<String> galleryImages,
+
+        /** Results roster (participant rows + placement + user-link). Optional. */
+        List<CampParticipant> results,
+
+        /** Per-placement prizes (rank → cosmetic id). Optional. */
+        List<CampReward> rewards,
 
         /** Stored status; defaults to UPCOMING when omitted (see service). */
         CampStatus status

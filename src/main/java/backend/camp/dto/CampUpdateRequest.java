@@ -1,5 +1,7 @@
 package backend.camp.dto;
 
+import backend.camp.CampParticipant;
+import backend.camp.CampReward;
 import backend.camp.CampStatus;
 import backend.camp.Instructor;
 import backend.camp.ScheduleDay;
@@ -33,6 +35,8 @@ public record CampUpdateRequest(
         List<Instructor> instructors,
         List<ScheduleDay> schedule,
         List<String> galleryImages,
+        List<CampParticipant> results,
+        List<CampReward> rewards,
         CampStatus status
 ) {
 }
