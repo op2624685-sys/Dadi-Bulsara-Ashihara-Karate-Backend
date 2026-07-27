@@ -3,6 +3,7 @@ package backend.event.dto;
 import backend.event.EventEntity;
 import backend.event.EventStatus;
 import backend.event.EventType;
+import backend.event.EventReward;
 import backend.event.Participant;
 
 import java.time.LocalDate;
@@ -28,6 +29,8 @@ public record EventResponse(
         String highlight,
         String state,
         List<Participant> participants,
+        /** Per-placement prizes (rank → cosmetic id). */
+        List<EventReward> rewards,
         /** Derived UPCOMING/PAST — computed from eventDate by the service. */
         EventStatus status,
         boolean published,
@@ -52,6 +55,7 @@ public record EventResponse(
                 e.getHighlight(),
                 e.getState(),
                 e.getParticipants(),
+                e.getRewards(),
                 status,
                 e.isPublished(),
                 e.getCreatedById());

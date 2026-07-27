@@ -1,6 +1,7 @@
 package backend.event.dto;
 
 import backend.event.EventType;
+import backend.event.EventReward;
 import backend.event.Participant;
 
 import java.time.LocalDate;
@@ -23,6 +24,7 @@ public record EventUpdateRequest(
         Integer totalParticipants,
         String highlight,
         String state,
-        List<Participant> participants
+        List<Participant> participants,
+        List<EventReward> rewards
 ) {
 }
