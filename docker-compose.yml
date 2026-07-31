@@ -1,0 +1,108 @@
+# =============================================================================
+# Local development stack for the Karate backend.
+# -----------------------------------------------------------------------------
+# Bring up:    docker compose up --build
+# Stop + wipe: docker compose down -v
+# =============================================================================
+#
+# Services:
+#   app       — Spring Boot fat-jar from the local Dockerfile
+#   postgres  — Postgres 16 (matches Neon major version)
+#   redis     — Redis 7
+#
+# All non-secret config is committed; secrets live in .env (gitignored).
+# The app reads SPRING_PROFILES_ACTIVE=dev (set in app: section).
+
+name: karate
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: karate-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB:       ${POSTGRES_DB:-karate}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-karate}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: karate-redis
+    restart: unless-stopped
+    # No persistence by default — cache only, mirrors local dev usage.
+    command: ["redis-server", "--appendonly", "no"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: karate-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Spring will read these directly; application.yaml already wires the
+      # *_KARATE variables below.
+      SPRING_PROFILES_ACTIVE: dev
+
+      DB_URL_KARATE:       jdbc:postgresql://postgres:5432/${POSTGRES_DB:-karate}
+      DB_USERNAME_KARATE:  ${POSTGRES_USER:-postgres}
+      DB_PASSWORD_KARATE:  ${POSTGRES_PASSWORD:-postgres}
+      REDIS_URL:           redis://redis:6379
+
+      JWT_SECRET_KARATE:   ${JWT_SECRET_KARATE:?set JWT_SECRET_KARATE to a 32+ byte hex string}
+
+      CORS_ORIGINS:        ${CORS_ORIGINS:-http://localhost:3000}
+      COOKIES_SECURE:      "false"
+      APP_SECURITY_CSRF_ENABLED: "false"
+
+      # SMTP — optional; if left blank Spring will fail to send mail but the
+      # app still boots (used only for password-reset / verify-email flows).
+      MAIL_HOST:     ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT:     ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM:     ${MAIL_FROM:-noreply@dadibulsara.local}
+
+      # Storage defaults (no provider enabled in local dev → ./uploads).
+      R2_ENABLED_KARATE:         "false"
+      CLOUDINARY_ENABLED_KARATE: "false"
+      ADMIN_SEED_EMAIL:          ${ADMIN_SEED_EMAIL:-admin@dadibulsara.local}
+      ADMIN_SEED_PASSWORD:       ${ADMIN_SEED_PASSWORD:-ChangeMe123!}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    volumes:
+      # Persist local image uploads outside the container so they survive
+      # `docker compose down` (only used when no storage provider is on).
+      - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres-data:
+  redis-data:

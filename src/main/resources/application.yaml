@@ -66,8 +66,10 @@ app:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000}
   mail:
     from: ${MAIL_FROM:noreply@dadibulsara.local}
-    reset-base-url: ${RESET_BASE_URL:http://localhost:3000/reset-password}
-    verify-base-url: ${VERIFY_BASE_URL:http://localhost:3000/verify-email}
+    # Derived from CORS_ORIGINS so prod only needs CORS_ORIGINS in the dashboard.
+    # Manually exporting RESET_BASE_URL / VERIFY_BASE_URL still overrides these.
+    reset-base-url: ${RESET_BASE_URL:#{'${CORS_ORIGINS:http://localhost:3000}' + '/reset-password'}}
+    verify-base-url: ${VERIFY_BASE_URL:#{'${CORS_ORIGINS:http://localhost:3000}' + '/verify-email'}}
   # Email-verification link lifetime. Keep this short (default 15m) so an
   # unverified account isn't left exposed for long. ISO-8601 duration.
   verification-ttl: ${VERIFICATION_TTL:PT15M}
