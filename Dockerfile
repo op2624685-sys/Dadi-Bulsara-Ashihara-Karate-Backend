@@ -14,13 +14,14 @@ WORKDIR /build
 
 # Resolve dependencies first so they cache across source-only changes.
 # pom.xml changes invalidate this layer; source-only edits do not.
+# `id=maven` is required by BuildKit (and therefore Render) to name the cache.
 COPY pom.xml ./
-RUN --mount=type=cache,target=/root/.m2 \
+RUN --mount=type=cache,id=maven,target=/root/.m2 \
     mvn -B -e -ntp -DskipTests dependency:go-offline
 
 # Now copy the rest of the source and build the executable jar.
 COPY src ./src
-RUN --mount=type=cache,target=/root/.m2 \
+RUN --mount=type=cache,id=maven,target=/root/.m2 \
     mvn -B -e -ntp -DskipTests package
 
 # ---------- Stage 2 : runtime -------------------------------------------------
