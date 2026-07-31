@@ -1,0 +1,46 @@
+# Keep the build context as small as possible — Maven downloads the rest.
+# Anything that would inflate the context without being used at build time
+# goes here.
+
+# Build outputs
+target/
+build/
+out/
+*.jar
+*.war
+*.class
+
+# IDE / editor
+.idea/
+.vscode/
+.project
+.classpath
+.settings/
+*.iml
+*.ipr
+*.iws
+
+# OS / misc
+.DS_Store
+Thumbs.db
+*.log
+
+# Env & secrets — never bake these into the image
+.env
+.env.*
+*.pem
+*.key
+
+# Local uploads (dev fallback for storage service)
+uploads/*
+!uploads/.gitkeep
+
+# Git metadata — surfaced via labels, not the context
+.git/
+.gitattributes
+
+# Docker artefacts — avoid recursive COPY surprises
+Dockerfile
+.dockerignore
+docker-compose.yml
+render.yaml
