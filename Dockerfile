@@ -14,15 +14,14 @@ WORKDIR /build
 
 # Resolve dependencies first so they cache across source-only changes.
 # pom.xml changes invalidate this layer; source-only edits do not.
-# `id=maven` is required by BuildKit (and therefore Render) to name the cache.
+# Render's BuildKit rejects --mount=type=cache, so we drop the cache and
+# accept a slightly longer build (~30-60s extra per deploy).
 COPY pom.xml ./
-RUN --mount=type=cache,id=maven,target=/root/.m2 \
-    mvn -B -e -ntp -DskipTests dependency:go-offline
+RUN mvn -B -e -ntp -DskipTests dependency:go-offline
 
 # Now copy the rest of the source and build the executable jar.
 COPY src ./src
-RUN --mount=type=cache,id=maven,target=/root/.m2 \
-    mvn -B -e -ntp -DskipTests package
+RUN mvn -B -e -ntp -DskipTests package
 
 # ---------- Stage 2 : runtime -------------------------------------------------
 FROM eclipse-temurin:21-jre-jammy AS runtime
@@ -51,10 +50,10 @@ COPY --from=builder --chown=karate:karate /build/target/*.jar /app/app.jar
 USER karate
 
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError" \
-    SERVER_PORT=8080 \
+    SERVER_PORT=10000 \
     SPRING_PROFILES_ACTIVE=prod
 
-EXPOSE 8080
+EXPOSE 10000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD curl -fsS http://127.0.0.1:${SERVER_PORT}/actuator/health || exit 1
