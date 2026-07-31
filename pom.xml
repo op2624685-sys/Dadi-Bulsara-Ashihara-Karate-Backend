@@ -92,12 +92,6 @@
 		</dependency>
 
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-devtools</artifactId>
-			<scope>runtime</scope>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
@@ -168,16 +162,6 @@
 							<artifactId>lombok</artifactId>
 						</exclude>
 					</excludes>
-					<!-- JDK 24 BuiltinClassLoader regression (spring-projects/spring-boot#44918):
-					     DevTools' RestartClassLoader fails to resolve java.util.Optional on startup.
-					     The -XX:-UseVectorizedHashCodeIntrinsic workaround is forced back to true on
-					     JDK 24.0.1, so DevTools auto-restart is disabled via the system property below.
-					     NOTE: this MUST be a JVM -D property (not application.yaml), because DevTools'
-					     RestartApplicationListener reads it at ApplicationStartingEvent, before
-					     application.yaml is loaded. Move to JDK 21 to re-enable auto-restart. -->
-					<jvmArguments>
-						-Dspring.devtools.restart.enabled=false
-					</jvmArguments>
 				</configuration>
 			</plugin>
 			<plugin>
