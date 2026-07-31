@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -e -ntp -DskipTests package
 
 # ---------- Stage 2 : runtime -------------------------------------------------
-FROM eclipse-temurin:21.0.4_9-jre-jammy AS runtime
+FROM eclipse-temurin:21-jre-jammy AS runtime
 
 # OCI labels — Render and Docker Hub read these.
 LABEL org.opencontainers.image.title="karate-backend" \
