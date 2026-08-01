@@ -28,20 +28,16 @@ spring:
           time_zone: UTC
 
   mail:
-    # Resend SMTP (https://resend.com) — port 465 with SSL, more reliable on
-    # Render than Gmail SMTP (port 587 is blocked / slow on cloud providers).
-    host: ${MAIL_HOST:smtp.resend.com}
-    port: ${MAIL_PORT:465}
-    username: ${MAIL_USERNAME:resend}
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
           auth: ${MAIL_AUTH:true}
           starttls:
-            enable: ${MAIL_STARTTLS:false}
-          ssl:
-            enable: ${MAIL_SSL:true}
+            enable: ${MAIL_STARTTLS:true}
 
 server:
   port: ${SERVER_PORT:8080}
