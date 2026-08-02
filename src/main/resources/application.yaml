@@ -27,21 +27,10 @@ spring:
         jdbc:
           time_zone: UTC
 
-  mail:
-    # Resend SMTP (https://resend.com) — port 465 with SSL, more reliable on
-    # Render than Gmail SMTP (port 587 is blocked / slow on cloud providers).
-    host: ${MAIL_HOST:smtp.resend.com}
-    port: ${MAIL_PORT:465}
-    username: ${MAIL_USERNAME:resend}
-    password: ${RESEND_MAIL_API_KEY}
-    properties:
-      mail:
-        smtp:
-          auth: ${MAIL_AUTH:true}
-          starttls:
-            enable: ${MAIL_STARTTLS:false}
-          ssl:
-            enable: ${MAIL_SSL:true}
+  # Email delivery is done via the Resend HTTP API (https://api.resend.com/emails),
+  # not SMTP — Render's AWS egress blocks outbound port 465 (and 587 is unreliable),
+  # which made JavaMailSender unable to reach smtp.resend.com. EmailService uses
+  # java.net.http.HttpClient instead. Auth is RESEND_MAIL_API_KEY (Bearer token).
 
 server:
   port: ${SERVER_PORT:8080}
