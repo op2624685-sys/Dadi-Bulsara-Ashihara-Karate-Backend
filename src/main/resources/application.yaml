@@ -70,6 +70,14 @@ app:
   verification-ttl: ${VERIFICATION_TTL:PT15M}
   cookies:
     secure: ${COOKIES_SECURE:false}        # set to true behind HTTPS in prod
+    # SameSite strategy for auth cookies. Default 'Lax' is safe for same-site
+    # deployments (localhost dev, single-domain hosting). For cross-site prod
+    # (frontend on Vercel, backend on Railway) you MUST set this to 'None' —
+    # browsers block cross-site cookies unless SameSite=None; Secure. Override
+    # via COOKIES_SAME_SITE=None on Railway (and APP_SECURITY_CSRF_ENABLED=true
+    # is also required, since SameSite=None removes the CSRF mitigation that
+    # Lax/Strict provided on top-level navigations).
+    same-site: ${COOKIES_SAME_SITE:Lax}
 
   # Image storage. Exactly one provider is active, chosen by its `enabled` flag:
   #   * app.storage.cloudinary.enabled=true  -> Cloudinary

@@ -12,6 +12,8 @@ import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import tools.jackson.databind.DefaultTyping;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import tools.jackson.databind.jsontype.PolymorphicTypeValidator;
 
@@ -25,41 +27,42 @@ import java.util.Map;
 @EnableCaching
 public class RedisCacheConfig {
 
-    @Bean
-    public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        // Spring Boot 4.1 ships Jackson 3 (tools.jackson.databind). The default
-        // RedisSerializer.json() in spring-data-redis 4.1 uses the Jackson 3
-        // GenericJacksonJsonRedisSerializer WITHOUT default typing — so any
-        // @Cacheable read on a fresh cache (or after restart) sees a null target
-        // type and throws:
-        //   "Deserialization type must not be null; Please provide Object.class
-        //    to make use of Jackson3 default typing."
-        // This breaks every @Cacheable read (login -> /me -> users::email fails
-        // -> client thinks user is unauthenticated).
-        //
-        // Fix: use the Jackson 3 builder path that Spring Data Redis 4.1 ships
-        // specifically for this case, then customize() the underlying
-        // JsonMapper.Builder to install our OWN default typing. We cannot use
-        // Spring's enableDefaultTyping() helper because it hard-codes
-        // DefaultTyping.NON_FINAL (visible in its bytecode), and our cached
-        // DTOs are all Java `record`s — records are implicitly final, so
-        // NON_FINAL skips them on the writer side, leaving stored JSON without
-        // a type id. On the reader side the deserializer then falls back to
-        // WRAPPER_ARRAY format and explodes with "Unexpected token
-        // START_OBJECT, expected VALUE_STRING" (AsArrayTypeDeserializer failure).
-        //
-        // Jackson 3 added DefaultTyping.NON_FINAL_AND_RECORDS specifically for
-        // this case, which is what we wire up here via the customize() callback.
+    /**
+     * Build a Jackson 3 ObjectMapper with default typing configured for our
+     * cache value types. Spring Boot 4.1 ships Jackson 3 (tools.jackson.databind).
+     *
+     * The default RedisSerializer.json() in spring-data-redis 4.1 ships the
+     * Jackson 3 GenericJacksonJsonRedisSerializer WITHOUT default typing — any
+     * @Cacheable read on a fresh cache throws:
+     *   "Deserialization type must not be null; Please provide Object.class to
+     *    make use of Jackson3 default typing."
+     *
+     * Spring's builder.enableDefaultTyping(validator) helper hardcodes
+     * DefaultTyping.NON_FINAL + As.WRAPPER_ARRAY (visible in bytecode). Our
+     * cached DTOs are all Java records — records are implicitly final, so
+     * NON_FINAL skips them and stored JSON ends up without a type id; the
+     * reader then explodes trying to locate a wrapper-array type id on an
+     * object.
+     *
+     * Jackson 3 added DefaultTyping.NON_FINAL_AND_RECORDS specifically for this
+     * case, paired with As.PROPERTY which writes the type id as a sibling
+     * property ({ "@class": "...", ... }) and is symmetric on read. We build
+     * the ObjectMapper ourselves and pass it via the constructor — the
+     * GenericJacksonJsonRedisSerializer constructor takes a configured
+     * ObjectMapper directly without applying its own default-typing config.
+     */
+    private ObjectMapper buildCacheMapper() {
         PolymorphicTypeValidator typeValidator = BasicPolymorphicTypeValidator.builder()
                 .allowIfBaseType(Object.class)
                 .build();
-
-        RedisSerializer<Object> jsonSerializer = GenericJacksonJsonRedisSerializer.builder()
-                .customize(builder -> builder.activateDefaultTyping(
-                        typeValidator,
-                        DefaultTyping.NON_FINAL_AND_RECORDS,
-                        JsonTypeInfo.As.PROPERTY))
+        return JsonMapper.builder()
+                .activateDefaultTyping(typeValidator, DefaultTyping.NON_FINAL_AND_RECORDS, JsonTypeInfo.As.PROPERTY)
                 .build();
+    }
+
+    @Bean
+    public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        RedisSerializer<Object> jsonSerializer = new GenericJacksonJsonRedisSerializer(buildCacheMapper());
 
         // Default configuration: 10 minutes TTL, serialize keys as String, values as JSON
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()

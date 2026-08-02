@@ -15,6 +15,11 @@ app:
     csrf-enabled: true
   cookies:
     secure: true
+    # Cross-site deployment (frontend on Vercel, backend on Railway) requires
+    # SameSite=None; Secure so the browser sends the auth cookies on the next
+    # API call. The XSRF double-submit (still enabled via csrf-enabled: true)
+    # is the CSRF defence in this configuration.
+    same-site: None
 
 springdoc:
   api-docs:
