@@ -14,7 +14,12 @@ import java.time.Duration;
  * All auth cookies share the same attributes:
  *   - HttpOnly   : not accessible to JS (XSS-safe)
  *   - Secure     : off in dev (no HTTPS), on in prod (config flag)
- *   - SameSite   : Strict (CSRF-safe, since we always require X-XSRF-TOKEN too)
+ *   - SameSite   : Lax (CSRF-safe — POSTs are still blocked cross-site by the
+ *                  XSRF token check; GETs (like /me) need the cookie to be
+ *                  sent on top-level navigation. Strict blocks cookies on all
+ *                  cross-site requests including GETs, which breaks /me after
+ *                  a same-tab login redirect when the frontend and backend are
+ *                  on different eTLD+1 hosts (e.g. Vercel -> Railway).)
  *   - Path       : /
  */
 @Service
@@ -43,7 +48,7 @@ public class CookieService {
         return ResponseCookie.from(name, value)
                 .httpOnly(true)
                 .secure(props.cookies().secure())
-                .sameSite("Strict")
+                .sameSite("Lax")
                 .path("/")
                 .maxAge(maxAge)
                 .build();
