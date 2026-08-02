@@ -33,7 +33,7 @@ spring:
     host: ${MAIL_HOST:smtp.resend.com}
     port: ${MAIL_PORT:465}
     username: ${MAIL_USERNAME:resend}
-    password: ${MAIL_PASSWORD}
+    password: ${RESEND_MAIL_API_KEY}
     properties:
       mail:
         smtp:
@@ -69,11 +69,13 @@ app:
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000}
   mail:
-    from: ${MAIL_FROM:noreply@dadibulsara.local}
-    # Derived from CORS_ORIGINS so prod only needs CORS_ORIGINS in the dashboard.
-    # Manually exporting RESET_BASE_URL / VERIFY_BASE_URL still overrides these.
-    reset-base-url: ${RESET_BASE_URL:#{'${CORS_ORIGINS:http://localhost:3000}' + '/reset-password'}}
-    verify-base-url: ${VERIFY_BASE_URL:#{'${CORS_ORIGINS:http://localhost:3000}' + '/verify-email'}}
+    from: ${MAIL_FROM}
+    # NOTE: SpEL (#{...}) does NOT work inside a ${prop:default} placeholder —
+    # Spring leaves the default as a literal string. So we fall back to a fixed
+    # localhost URL here, and override via env vars for production. Override
+    # RESET_BASE_URL / VERIFY_BASE_URL in .env or the Render dashboard.
+    reset-base-url: ${RESET_BASE_URL:http://localhost:3000/reset-password}
+    verify-base-url: ${VERIFY_BASE_URL:http://localhost:3000/verify-email}
   # Email-verification link lifetime. Keep this short (default 15m) so an
   # unverified account isn't left exposed for long. ISO-8601 duration.
   verification-ttl: ${VERIFICATION_TTL:PT15M}
