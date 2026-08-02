@@ -11,8 +11,11 @@ import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+import tools.jackson.databind.DefaultTyping;
 import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import tools.jackson.databind.jsontype.PolymorphicTypeValidator;
+
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -35,15 +38,27 @@ public class RedisCacheConfig {
         // -> client thinks user is unauthenticated).
         //
         // Fix: use the Jackson 3 builder path that Spring Data Redis 4.1 ships
-        // specifically for this case, enabling default typing with a permissive
-        // PolymorphicTypeValidator (same pattern as Jackson 2's BasicPolymorphicTypeValidator
-        // but in the tools.jackson.databind.jsontype package).
+        // specifically for this case, then customize() the underlying
+        // JsonMapper.Builder to install our OWN default typing. We cannot use
+        // Spring's enableDefaultTyping() helper because it hard-codes
+        // DefaultTyping.NON_FINAL (visible in its bytecode), and our cached
+        // DTOs are all Java `record`s — records are implicitly final, so
+        // NON_FINAL skips them on the writer side, leaving stored JSON without
+        // a type id. On the reader side the deserializer then falls back to
+        // WRAPPER_ARRAY format and explodes with "Unexpected token
+        // START_OBJECT, expected VALUE_STRING" (AsArrayTypeDeserializer failure).
+        //
+        // Jackson 3 added DefaultTyping.NON_FINAL_AND_RECORDS specifically for
+        // this case, which is what we wire up here via the customize() callback.
         PolymorphicTypeValidator typeValidator = BasicPolymorphicTypeValidator.builder()
                 .allowIfBaseType(Object.class)
                 .build();
 
         RedisSerializer<Object> jsonSerializer = GenericJacksonJsonRedisSerializer.builder()
-                .enableDefaultTyping(typeValidator)
+                .customize(builder -> builder.activateDefaultTyping(
+                        typeValidator,
+                        DefaultTyping.NON_FINAL_AND_RECORDS,
+                        JsonTypeInfo.As.PROPERTY))
                 .build();
 
         // Default configuration: 10 minutes TTL, serialize keys as String, values as JSON
