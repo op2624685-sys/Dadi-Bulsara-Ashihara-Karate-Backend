@@ -43,9 +43,14 @@ spring:
           starttls:
             enable: true
             required: true   # Gmail rejects plain-text sessions
-          connectiontimeout: 5000
-          timeout: 5000
-          writetimeout: 5000
+          # Generous timeouts — Render's AWS egress can be slow on the first
+          # TCP/TLS handshake to smtp.gmail.com. 5s on production was too tight
+          # (saw SocketTimeoutException on connect). 30s gives the handshake
+          # room to complete; failures are still surfaced to the @Async caller
+          # via the dev-fallback log.
+          connectiontimeout: 30000
+          timeout: 30000
+          writetimeout: 30000
 
 server:
   port: ${SERVER_PORT:8080}
