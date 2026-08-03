@@ -27,10 +27,25 @@ spring:
         jdbc:
           time_zone: UTC
 
-  # Email delivery is done via the Resend HTTP API (https://api.resend.com/emails),
-  # not SMTP — Render's AWS egress blocks outbound port 465 (and 587 is unreliable),
-  # which made JavaMailSender unable to reach smtp.resend.com. EmailService uses
-  # java.net.http.HttpClient instead. Auth is RESEND_MAIL_API_KEY (Bearer token).
+  mail:
+    # Gmail SMTP. Port 587 + STARTTLS — Render's AWS egress blocks SMTPS port 465,
+    # so 587 is the only viable combination in production. Local dev uses the
+    # same port. Sender = MAIL_USERNAME, auth = MAIL_PASSWORD (a Gmail App
+    # Password, NOT the account password — generate at myaccount.google.com/apppasswords).
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true   # Gmail rejects plain-text sessions
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 server:
   port: ${SERVER_PORT:8080}
