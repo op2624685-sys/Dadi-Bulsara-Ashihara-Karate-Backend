@@ -163,7 +163,8 @@ behaviour. Possible codes: `AUTH_REQUIRED`, `AUTH_FAILED`,
       `application.yaml`).
 - [ ] `COOKIES_SECURE=true` (requires HTTPS).
 - [ ] `CORS_ORIGINS` restricted to the real frontend domain.
-- [ ] SMTP credentials configured (`MAIL_*`).
+- [ ] `RESEND_MAIL_API_KEY` configured (and `MAIL_FROM` domain verified in
+      Resend's dashboard).
 - [ ] PostgreSQL connection uses a low-privilege user, not `postgres`.
 - [ ] Rate limiter swapped to Bucket4j + Redis.
 - [ ] Flyway migrations replace `ddl-auto=update`.

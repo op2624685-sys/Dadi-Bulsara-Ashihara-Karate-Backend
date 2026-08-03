@@ -192,9 +192,7 @@ environment — nothing sensitive is committed.
 | `JWT_SECRET`                 | ≥32-byte secret for HS256 signing (**required**)     |
 | `CORS_ORIGINS`               | Comma-separated allowed origins                     |
 | `COOKIES_SECURE`             | `true` behind HTTPS in production                    |
-| `MAIL_HOST` / `MAIL_PORT`    | SMTP server                                          |
-| `MAIL_USERNAME` / `MAIL_PASSWORD` | SMTP credentials                                |
-| `MAIL_AUTH` / `MAIL_STARTTLS`| SMTP auth / TLS toggles                              |
+| `RESEND_MAIL_API_KEY`        | Resend API key (https://resend.com/api-keys)        |
 | `MAIL_FROM`                  | From address for outbound email                      |
 | `RESET_BASE_URL`             | Base URL used in password-reset links                |
 | `VERIFY_BASE_URL`            | Base URL used in email-verification links            |
