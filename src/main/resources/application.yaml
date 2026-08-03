@@ -28,29 +28,30 @@ spring:
           time_zone: UTC
 
   mail:
-    # Gmail SMTP. Port 587 + STARTTLS — Render's AWS egress blocks SMTPS port 465,
-    # so 587 is the only viable combination in production. Local dev uses the
-    # same port. Sender = MAIL_USERNAME, auth = MAIL_PASSWORD (a Gmail App
-    # Password, NOT the account password — generate at myaccount.google.com/apppasswords).
+    # Gmail SMTP. Port 465 + implicit SSL — Render's AWS egress blocks STARTTLS
+    # port 587 (TCP handshake times out), so the only viable combo is implicit
+    # SSL on 465. If 465 is also blocked, fall back to an HTTP-API provider
+    # (Resend / SendGrid) — see `mail-smtp-render-block.md` memory.
+    # Sender = MAIL_USERNAME, auth = MAIL_PASSWORD (a Gmail App Password, NOT
+    # the account password — generate at myaccount.google.com/apppasswords).
     host: ${MAIL_HOST:smtp.gmail.com}
-    port: ${MAIL_PORT:587}
+    port: ${MAIL_PORT:465}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
           auth: true
-          starttls:
+          ssl:
             enable: true
-            required: true   # Gmail rejects plain-text sessions
-          # Generous timeouts — Render's AWS egress can be slow on the first
-          # TCP/TLS handshake to smtp.gmail.com. 5s on production was too tight
-          # (saw SocketTimeoutException on connect). 30s gives the handshake
-          # room to complete; failures are still surfaced to the @Async caller
-          # via the dev-fallback log.
-          connectiontimeout: 30000
-          timeout: 30000
-          writetimeout: 30000
+            trust: smtp.gmail.com
+            protocols: TLSv1.2 TLSv1.3
+          # 15s timeout — SSL handshake either succeeds fast or is blocked.
+          # We saw port 587 TCP-connect time out at 30s; if 465 also blocks,
+          # the failure surfaces quickly and the @Async caller logs the link.
+          connectiontimeout: 15000
+          timeout: 15000
+          writetimeout: 15000
 
 server:
   port: ${SERVER_PORT:8080}
