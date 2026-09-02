@@ -21,15 +21,15 @@ WORKDIR /app
 # Copy the built JAR from builder stage
 COPY --from=builder /app/target/karate-*.jar app.jar
 
+# Install curl for health checks (before switching to non-root user)
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Create a non-root user for security
 RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Expose port
 EXPOSE 8080
-
-# Install curl for health checks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
