@@ -75,12 +75,10 @@ public class SecurityConfig {
                             "/v3/api-docs/**",
                             "/swagger-ui/**",
                             "/swagger-ui.html",
-                            "/api/v1/auth/**",
-                            // Public teacher directory (list, detail) + open
-                            // registration. GETs need no CSRF; the POST is
-                            // already CSRF-exempt above.
-                            "/api/v1/teachers/**"
+                            "/api/v1/auth/**"
                     ).permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/teachers/register").authenticated()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/teachers/**").permitAll()
                     // Student registration is authenticated (tied to the caller's
                     // account) — declare it BEFORE the broad /students/** permitAll
                     // so the more specific rule wins.

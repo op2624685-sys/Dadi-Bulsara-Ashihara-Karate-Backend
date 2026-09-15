@@ -148,9 +148,6 @@ public class TeacherServiceImpl implements TeacherService {
             if (role == Role.TEACHER) {
                 throw new IllegalArgumentException("You are already registered as a sensei");
             }
-            if (role == Role.STUDENT) {
-                throw new IllegalArgumentException("Students cannot apply to become a teacher");
-            }
         }
 
         TeacherEntity teacher = TeacherEntity.builder()
