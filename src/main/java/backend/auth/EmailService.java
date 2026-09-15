@@ -45,11 +45,11 @@ public class EmailService {
      * 200 to the caller to avoid leaking whether an email exists.
      */
     @Async
-    public void sendPasswordResetEmail(String to, String rawToken) {
+    public void sendPasswordResetEmail(String to, String name, String rawToken) {
         String link = props.mail().resetBaseUrl() + "?token=" + rawToken;
         String subject = "Reset your Dadi Bulsara password";
         String body = """
-                Hi,
+                Hi %s,
 
                 We received a request to reset your password.
                 Click the link below within the next 15 minutes to set a new password:
@@ -59,18 +59,18 @@ public class EmailService {
                 If you did not request this, you can safely ignore this email.
 
                 — Dadi Bulsara
-                """.formatted(link);
+                """.formatted(name, link);
         String htmlBody = """
                 <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
                     <h2 style="color: #333;">Reset Your Password</h2>
-                    <p>Hi,</p>
+                    <p>Hi %s,</p>
                     <p>We received a request to reset your password. Click the link below within the next 15 minutes to set a new password:</p>
                     <p><a href="%s" style="background-color: #d32f2f; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a></p>
                     <p>If you did not request this, you can safely ignore this email.</p>
                     <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
                     <p style="font-size: 0.9em; color: #666;">— Dadi Bulsara Ashihara Karate Federation</p>
                 </div>
-                """.formatted(link);
+                """.formatted(name, link);
 
         try {
             sendViaResend(to, subject, body, htmlBody);
@@ -180,6 +180,44 @@ public class EmailService {
             log.info("Registration approved email sent to {}", to);
         } catch (Exception ex) {
             log.warn("[DEV] Could not send registration approved email ({}). To: {}", ex.getMessage(), to);
+        }
+    }
+
+    /**
+     * Sends a registration rejection email.
+     */
+    @Async
+    public void sendRegistrationRejectedEmail(String to, String role, String reason) {
+        String roleLabel = role.equalsIgnoreCase("TEACHER") ? "Teacher/Sensei" : "Student";
+        String finalReason = (reason == null || reason.isBlank())
+                ? "Your application did not meet the current requirements."
+                : reason;
+
+        String subject = "Update on your Registration - Dadi Bulsara";
+        String body = "Hi,\n\nThank you for your interest in joining us as a " + roleLabel + ".\n" +
+                      "Unfortunately, your application has not been approved at this time.\n" +
+                      "Reason: " + finalReason + "\n\nWe wish you the best in your karate journey.\n\n— Dadi Bulsara";
+
+        String htmlBody = """
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                    <h2 style="color: #333;">Application Update</h2>
+                    <p>Hi,</p>
+                    <p>Thank you for your interest in joining the Dadi Bulsara Ashihara Karate Federation as a <strong style="color: #d32f2f;">%s</strong>.</p>
+                    <p>After reviewing your application, we regret to inform you that it has not been approved at this time.</p>
+                    <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #ccc; margin: 20px 0; font-style: italic;">
+                        <strong>Reason:</strong> %s
+                    </div>
+                    <p>We appreciate your passion for karate and wish you the very best in your training and future journey.</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="font-size: 0.9em; color: #666;">— Dadi Bulsara Ashihara Karate Federation</p>
+                </div>
+                """.formatted(roleLabel, finalReason);
+
+        try {
+            sendViaResend(to, subject, body, htmlBody);
+            log.info("Registration rejected email sent to {}", to);
+        } catch (Exception ex) {
+            log.warn("[DEV] Could not send registration rejected email ({}). To: {}", ex.getMessage(), to);
         }
     }
 

@@ -311,6 +311,10 @@ public class StudentServiceImpl implements StudentService {
         student.setStatus(StudentStatus.REJECTED);
         student.setRejectionReason(isNotBlank(reason) ? reason.trim() : null);
         student = studentRepository.save(student);
+
+        // Notify user that application has been rejected
+        emailService.sendRegistrationRejectedEmail(student.getEmail(), "STUDENT", student.getRejectionReason());
+
         log.info("Student rejected by sensei {}: id={} reason={}", senseiId, id, student.getRejectionReason());
         return toResponse(student);
     }
@@ -383,6 +387,10 @@ public class StudentServiceImpl implements StudentService {
         student.setStatus(StudentStatus.REJECTED);
         student.setRejectionReason(isNotBlank(reason) ? reason.trim() : null);
         student = studentRepository.save(student);
+
+        // Notify user that application has been rejected
+        emailService.sendRegistrationRejectedEmail(student.getEmail(), "STUDENT", student.getRejectionReason());
+
         log.info("Student rejected by admin: id={} reason={}", id, student.getRejectionReason());
         return toResponse(student);
     }

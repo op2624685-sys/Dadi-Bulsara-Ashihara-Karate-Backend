@@ -320,6 +320,10 @@ public class TeacherServiceImpl implements TeacherService {
         teacher.setStatus(TeacherStatus.REJECTED);
         teacher.setRejectionReason(isNotBlank(reason) ? reason.trim() : null);
         teacher = teacherRepository.save(teacher);
+
+        // Notify user that application has been rejected
+        emailService.sendRegistrationRejectedEmail(teacher.getEmail(), "TEACHER", teacher.getRejectionReason());
+
         log.info("Teacher rejected: id={} reason={}", teacher.getId(), teacher.getRejectionReason());
         return toResponse(teacher);
     }

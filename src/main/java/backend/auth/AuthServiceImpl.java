@@ -225,7 +225,7 @@ public class AuthServiceImpl implements AuthService {
         passwordResetTokenRepository.save(entity);
 
         log.info("Password reset token issued for user_id={}", user.getId());
-        emailService.sendPasswordResetEmail(user.getEmail(), rawToken);
+        emailService.sendPasswordResetEmail(user.getEmail(), user.getFirstName(), rawToken);
     }
 
     // ---------------------------------------------------------------------
