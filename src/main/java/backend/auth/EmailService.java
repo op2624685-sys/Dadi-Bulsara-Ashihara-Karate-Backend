@@ -60,9 +60,20 @@ public class EmailService {
 
                 — Dadi Bulsara
                 """.formatted(link);
+        String htmlBody = """
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                    <h2 style="color: #333;">Reset Your Password</h2>
+                    <p>Hi,</p>
+                    <p>We received a request to reset your password. Click the link below within the next 15 minutes to set a new password:</p>
+                    <p><a href="%s" style="background-color: #d32f2f; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a></p>
+                    <p>If you did not request this, you can safely ignore this email.</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="font-size: 0.9em; color: #666;">— Dadi Bulsara Ashihara Karate Federation</p>
+                </div>
+                """.formatted(link);
 
         try {
-            sendViaResend(to, subject, body);
+            sendViaResend(to, subject, body, htmlBody);
             log.info("Password-reset email sent to {}", to);
         } catch (Exception ex) {
             // SMTP-style dev fallback: log the link so devs can still complete the flow
@@ -94,9 +105,21 @@ public class EmailService {
 
                 — Dadi Bulsara
                 """.formatted(link);
+        String htmlBody = """
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                    <h2 style="color: #d32f2f;">Verify Your Account</h2>
+                    <p>Hi,</p>
+                    <p>Welcome to the Dadi Bulsara Ashihara Karate Federation!</p>
+                    <p>Click the link below within the next 15 minutes to verify your email and activate your account:</p>
+                    <p><a href="%s" style="background-color: #d32f2f; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Verify Email</a></p>
+                    <p>If you did not sign up, you can safely ignore this email.</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="font-size: 0.9em; color: #666;">— Dadi Bulsara Ashihara Karate Federation</p>
+                </div>
+                """.formatted(link);
 
         try {
-            sendViaResend(to, subject, body);
+            sendViaResend(to, subject, body, htmlBody);
             log.info("Verification email sent to {}", to);
         } catch (Exception ex) {
             log.warn("[DEV] Could not send verification email ({}). Verification link: {}",
@@ -105,11 +128,67 @@ public class EmailService {
     }
 
     /**
+     * Sends a registration application submission email.
+     */
+    @Async
+    public void sendApplicationSubmittedEmail(String to, String role) {
+        String roleLabel = role.equalsIgnoreCase("TEACHER") ? "Teacher/Sensei" : "Student";
+        String subject = "Application Received - Dadi Bulsara";
+        String body = "Hi,\n\nWe have received your application for " + roleLabel + " membership. Our team will review it and get back to you soon.\n\n— Dadi Bulsara";
+        String htmlBody = """
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                    <h2 style="color: #d32f2f;">Application Received!</h2>
+                    <p>Hi,</p>
+                    <p>We have received your application for <strong>%s</strong> membership at the Dadi Bulsara Ashihara Karate Federation.</p>
+                    <p>Our team is currently reviewing your details. We will notify you via email once the process is complete.</p>
+                    <p>Thank you for your patience!</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="font-size: 0.9em; color: #666;">— Dadi Bulsara Ashihara Karate Federation</p>
+                </div>
+                """.formatted(roleLabel);
+
+        try {
+            sendViaResend(to, subject, body, htmlBody);
+            log.info("Application submitted email sent to {}", to);
+        } catch (Exception ex) {
+            log.warn("[DEV] Could not send application submitted email ({}). To: {}", ex.getMessage(), to);
+        }
+    }
+
+    /**
+     * Sends a registration approval email.
+     */
+    @Async
+    public void sendRegistrationApprovedEmail(String to, String role) {
+        String roleLabel = role.equalsIgnoreCase("TEACHER") ? "Teacher/Sensei" : "Student";
+        String subject = "Registration Approved - Dadi Bulsara";
+        String body = "Congratulations!\n\nYour registration as a " + roleLabel + " has been approved. Your account is now fully active.\n\nWelcome to the federation!\n\n— Dadi Bulsara";
+        String htmlBody = """
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                    <h2 style="color: #2e7d32;">Congratulations! 🎉</h2>
+                    <p>Hi,</p>
+                    <p>We are happy to inform you that your registration as a <strong>%s</strong> has been officially approved!</p>
+                    <p>Your account is now fully active, and you can now access all the membership benefits of the Dadi Bulsara Ashihara Karate Federation.</p>
+                    <p>Welcome to the family!</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="font-size: 0.9em; color: #666;">— Dadi Bulsara Ashihara Karate Federation</p>
+                </div>
+                """.formatted(roleLabel);
+
+        try {
+            sendViaResend(to, subject, body, htmlBody);
+            log.info("Registration approved email sent to {}", to);
+        } catch (Exception ex) {
+            log.warn("[DEV] Could not send registration approved email ({}). To: {}", ex.getMessage(), to);
+        }
+    }
+
+    /**
      * POSTs the email to Resend's /emails endpoint. Resend returns 200 on
      * accept with a JSON {@code {"id": "..."}} body; we treat anything outside
      * [200, 300) as a failure so the caller's catch-block logs the cause.
      */
-    private void sendViaResend(String to, String subject, String textBody) throws Exception {
+    private void sendViaResend(String to, String subject, String textBody, String htmlBody) throws Exception {
         if (resendApiKey == null || resendApiKey.isBlank()) {
             throw new IllegalStateException(
                     "RESEND_MAIL_API_KEY is not configured (set it in .env / Render dashboard)");
@@ -120,12 +199,14 @@ public class EmailService {
                   "from": %s,
                   "to": [%s],
                   "subject": %s,
-                  "text": %s
+                  "text": %s,
+                  "html": %s
                 }
                 """.formatted(jsonString(props.mail().from()),
                               jsonString(to),
                               jsonString(subject),
-                              jsonString(textBody));
+                              jsonString(textBody),
+                              jsonString(htmlBody));
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(RESEND_EMAILS_URL))

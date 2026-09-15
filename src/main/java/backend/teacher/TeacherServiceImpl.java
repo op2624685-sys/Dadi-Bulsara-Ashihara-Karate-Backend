@@ -43,6 +43,7 @@ public class TeacherServiceImpl implements TeacherService {
     private final UserRepository userRepository;
     private final SecurityService securityService;
     private final CosmeticCatalogue cosmeticCatalogue;
+    private final backend.auth.EmailService emailService;
 
     /**
      * Ensures a SUB_ADMIN can only touch teachers in their managed state.
@@ -182,6 +183,10 @@ public class TeacherServiceImpl implements TeacherService {
                 .build();
 
         teacher = teacherRepository.save(teacher);
+
+        // Notify user that application has been submitted
+        emailService.sendApplicationSubmittedEmail(teacher.getEmail(), "TEACHER");
+
         log.info("Teacher registered (PENDING): id={} name={} {}", teacher.getId(),
                 teacher.getFirstName(), teacher.getLastName());
         return toResponse(teacher);
@@ -293,6 +298,10 @@ public class TeacherServiceImpl implements TeacherService {
         teacher.setRejectionReason(null);
         teacher = teacherRepository.save(teacher);
         seedUnlocksFromBelt(teacher);
+
+        // Notify user that application has been approved
+        emailService.sendRegistrationApprovedEmail(teacher.getEmail(), "TEACHER");
+
         log.info("Teacher approved: id={} name={} {}", teacher.getId(),
                 teacher.getFirstName(), teacher.getLastName());
         return toResponse(teacher);

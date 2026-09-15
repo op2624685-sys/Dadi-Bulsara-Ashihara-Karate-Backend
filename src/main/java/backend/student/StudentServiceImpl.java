@@ -45,6 +45,7 @@ public class StudentServiceImpl implements StudentService {
     private final UserRepository userRepository;
     private final SecurityService securityService;
     private final CosmeticCatalogue cosmeticCatalogue;
+    private final backend.auth.EmailService emailService;
 
     // ---------------------------------------------------------------------
     // Public directory
@@ -207,6 +208,9 @@ public class StudentServiceImpl implements StudentService {
 
         student = studentRepository.save(student);
 
+        // Notify user that application has been submitted
+        emailService.sendApplicationSubmittedEmail(student.getEmail(), "STUDENT");
+
         // Seed the applicant's unlocked cosmetics from their belt (idempotent
         // union — preserves any event/achievement unlocks already present).
         UserEntity user = userRepository.findById(currentUser.getId()).orElse(currentUser);
@@ -287,6 +291,10 @@ public class StudentServiceImpl implements StudentService {
         student.setRejectionReason(null);
         student = studentRepository.save(student);
         promoteToStudent(student);
+
+        // Notify user that application has been approved
+        emailService.sendRegistrationApprovedEmail(student.getEmail(), "STUDENT");
+
         log.info("Student approved by sensei {}: id={} name={} {}",
                 senseiId, student.getId(), student.getFirstName(), student.getLastName());
         return toResponse(student);
@@ -355,6 +363,10 @@ public class StudentServiceImpl implements StudentService {
         student.setRejectionReason(null);
         student = studentRepository.save(student);
         promoteToStudent(student);
+
+        // Notify user that application has been approved
+        emailService.sendRegistrationApprovedEmail(student.getEmail(), "STUDENT");
+
         log.info("Student approved by admin: id={} name={} {}", student.getId(), student.getFirstName(), student.getLastName());
         return toResponse(student);
     }
