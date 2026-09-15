@@ -138,7 +138,8 @@ public class SecurityConfig {
                             // registration. The registration endpoint is a
                             // public JSON entry point with no session, so it
                             // is CSRF-exempt just like the auth endpoints.
-                            "/api/v1/teachers/register"))
+                            "/api/v1/teachers/register",
+                            "/api/v1/students/register"))
                 // Force the XSRF-TOKEN cookie onto every response so the SPA can
                 // read it (the deferred CsrfTokenRequestHandler only writes the
                 // cookie when the token value is accessed, which never happens
